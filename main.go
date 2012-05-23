@@ -2,12 +2,12 @@ package main
 
 import (
 	"crypto/rand"
-	"io"
 	"encoding/xml"
 	"fmt"
-	"net/http"
-	"net"
+	"io"
 	"log"
+	"net"
+	"net/http"
 )
 
 func makeDeviceUuid() string {
@@ -19,15 +19,15 @@ func makeDeviceUuid() string {
 }
 
 type server struct {
-	uuid string
-	xmlDesc []byte
+	uuid     string
+	xmlDesc  []byte
 	ssdpConn *net.UDPConn
 	ssdpAddr *net.UDPAddr
 }
 
 type devDescRoot struct {
 	XMLName xml.Name `xml:"root"`
-	Device device `xml:"device"`
+	Device  device   `xml:"device"`
 }
 
 type device struct {
@@ -47,7 +47,7 @@ func main() {
 		uuid: makeDeviceUuid(),
 	}
 	var err error
-	s.xmlDesc, err = xml.MarshalIndent(devDescRoot{Device:device{UDN:s.uuid}}, " ", "  ")
+	s.xmlDesc, err = xml.MarshalIndent(devDescRoot{Device: device{UDN: s.uuid}}, " ", "  ")
 	if err != nil {
 		panic(err)
 	}
