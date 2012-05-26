@@ -18,6 +18,7 @@ const (
 	serverField   = "Linux/3.4 UPnP/1.1 DMS/1.0"
 	ssdpMcastAddr = "239.255.255.250:1900"
 	httpPort      = "1337"
+	rootDeviceType = "urn:schemas-upnp-org:device:MediaServer:1"
 )
 
 func makeDeviceUuid() string {
@@ -37,13 +38,38 @@ type server struct {
 	ssdpLogger *log.Logger
 }
 
-type devDescRoot struct {
-	XMLName xml.Name `xml:"root"`
-	Device  device   `xml:"device"`
+type specVersion struct {
+	Major int
+	Minor int
+}
+
+type icon struct {
+	Mimetype, Width, Height, Depth, URL string
+}
+
+type service struct {
+	ServiceType, ServiceId, SCPDURL, ControlURL, EventSubURL string
 }
 
 type device struct {
-	UDN string
+	DeviceType, FriendlyName, Manufacturer, ModelName, UDN string
+	IconList []icon
+	ServiceList []service
+}
+
+var services = []service{
+	service{
+		ServiceType: "urn:schemas-upnp-org:service:ContentDirectory:1",
+		ServiceId: "urn:upnp-org:serviceId:ContentDirectory",
+		SCPDURL: "/scpd/ContentDirectory.xml",
+		ControlURL: "/ctl/ContentDirectory",
+		EventSubURL: "/evt/ContentDirectory",
+	},
+}
+
+type root struct {
+	Device device
+	SpecVersion specVersion
 }
 
 func respondToSSDP(conn *net.UDPConn, lgr *log.Logger) {
@@ -112,7 +138,7 @@ func main() {
 		log.Fatalln(err)
 	}
 	s.ssdpLogger = log.New(ssdpLogFile, "", log.Flags())
-	s.xmlDesc, err = xml.MarshalIndent(devDescRoot{Device: device{UDN: s.uuid}}, " ", "  ")
+	s.xmlDesc, err = xml.MarshalIndent(root{Device: device{UDN: s.uuid, ServiceList:services}}, " ", "  ")
 	if err != nil {
 		panic(err)
 	}
