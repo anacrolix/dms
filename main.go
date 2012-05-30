@@ -2,15 +2,18 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
+	//"crypto/rand"
 	"encoding/xml"
+	//"io/ioutil"
 	"fmt"
-	"io"
+	//"io"
+	"bitbucket.org/anacrolix/dms/soap"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/user"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -22,10 +25,13 @@ const (
 )
 
 func makeDeviceUuid() string {
-	buf := make([]byte, 16)
-	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
-		panic(err)
-	}
+	/*
+		buf := make([]byte, 16)
+		if _, err := io.ReadFull(rand.Reader, buf); err != nil {
+			panic(err)
+		}
+	*/
+	var buf [16]byte
 	return fmt.Sprintf("uuid:%x-%x-%x-%x-%x", buf[:4], buf[4:6], buf[6:8], buf[8:10], buf[10:])
 }
 
@@ -39,11 +45,11 @@ type icon struct {
 }
 
 type service struct {
-	XMLName xml.Name `xml:"service"`
-	ServiceType string `xml:"serviceType"`
-	ServiceId string `xml:"serviceId"`
-	SCPDURL string
-	ControlURL string `xml:"controlURL"`
+	XMLName     xml.Name `xml:"service"`
+	ServiceType string   `xml:"serviceType"`
+	ServiceId   string   `xml:"serviceId"`
+	SCPDURL     string
+	ControlURL  string `xml:"controlURL"`
 	EventSubURL string `xml:"eventSubURL"`
 }
 
@@ -63,13 +69,11 @@ var services = []service{
 		ServiceId:   "urn:upnp-org:serviceId:ContentDirectory",
 		SCPDURL:     "/scpd/ContentDirectory.xml",
 		ControlURL:  "/ctl/ContentDirectory",
-		EventSubURL: "/evt/ContentDirectory",
 	},
 }
 
 type root struct {
 	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:device-1-0 root"`
-	ConfigId    uint        `xml:"configId,attr"`
 	SpecVersion specVersion `xml:"specVersion"`
 	Device      device      `xml:"device"`
 }
@@ -252,6 +256,103 @@ func main() {
 		w.Header().Set("content-length", fmt.Sprint(len(rootDescXML)))
 		w.Write(rootDescXML)
 	})
+	http.HandleFunc("/ctl/ContentDirectory", func(w http.ResponseWriter, r *http.Request) {
+		var env soap.Envelope
+		if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
+			panic(err)
+		}
+		msg := env.Parse()
+		serviceTypeParts := strings.Split(msg.ServiceType, ":")
+		if serviceTypeParts[len(serviceTypeParts)-2] != "ContentDirectory" {
+			panic(serviceTypeParts)
+		}
+		rmsg := soap.Message{
+			ServiceType: msg.ServiceType,
+			Action:      msg.Action + "Response",
+		}
+		switch msg.Action {
+		case "GetSortCapabilities":
+			rmsg.Args = map[string]string{
+				"SortCaps": "dc:title",
+			}
+		case "Browse":
+			log.Println("browse args", msg)
+			path := msg.Args["ObjectID"]
+			if path == "0" {
+				path = "/"
+			}
+			dir, err := os.Open(path)
+			if err != nil {
+				panic(err)
+			}
+			names, err := dir.Readdirnames(-1)
+			if err != nil {
+				panic(err)
+			}
+			result, err := xml.MarshalIndent(func() (ret []UPNPObject) {
+				for _, n := range names {
+					ret = append(ret, UPNPObject{
+						XMLName:    xml.Name{Local: "item"},
+						ID:         n,
+						ParentID:   msg.Args["ObjectID"],
+						Restricted: 1,
+						Class:      "object.item.videoItem",
+						Title:      n,
+					})
+				}
+				return
+			}(), "", "  ")
+			if err != nil {
+				panic(err)
+			}
+			rmsg.Args = map[string]string{
+				"TotalMatches":   fmt.Sprintf("%d", len(names)),
+				"NumberReturned": fmt.Sprintf("%d", len(names)),
+				"Result":         string(didl_lite(string(result))),
+			}
+		default:
+			panic(msg.Action)
+		}
+		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
+		body, err := xml.MarshalIndent(rmsg.Wrap(), "", "  ")
+		if err != nil {
+			panic(err)
+		}
+		log.Println("response:", string(body))
+		if _, err := w.Write(body); err != nil {
+			panic(err)
+		}
+	})
 	go serveHTTP()
 	doSSDP()
+}
+
+type Resource struct {
+	XMLName      xml.Name `xml:"res"`
+	ProtocolInfo string   `xml:"protocolInfo"`
+	URL          string   `xml:",chardata"`
+	Size         int      `xml:"size,attr"`
+	Bitrate      int      `xml:"bitrate,attr"`
+	Duration     string   `xml:"duration,attr"`
+}
+
+type UPNPObject struct {
+	XMLName    xml.Name
+	ID         string `xml:"id,attr"`
+	ParentID   string `xml:"parentID,attr"`
+	Restricted int    `xml:"restricted,attr"`
+	Class      string `xml:"upnp:class"`
+	Icon       string `xml:"upnp:icon"`
+	Title      string `xml:"dc:title"`
+	Res        []Resource
+}
+
+func didl_lite(chardata string) string {
+	return `<DIDL-Lite` +
+		` xmlns:dc="http://purl.org/dc/elements/1.1/"` +
+		` xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"` +
+		` xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"` +
+		` xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">` +
+		chardata +
+		`</DIDL-Lite>`
 }
