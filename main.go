@@ -9,10 +9,14 @@ import (
 	//"io"
 	"bitbucket.org/anacrolix/dms/soap"
 	"log"
+	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/user"
+	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -22,6 +26,7 @@ const (
 	serverField         = "Linux/3.4 UPnP/1.1 DMS/1.0"
 	rootDeviceType      = "urn:schemas-upnp-org:device:MediaServer:1"
 	rootDeviceModelName = "dms 1.0"
+	resPath             = "/res"
 )
 
 func makeDeviceUuid() string {
@@ -171,7 +176,7 @@ func sSDPInterface(if_ net.Interface) {
 			log.Println(addr)
 			notifyAlive(conn, addr4)
 		}
-		time.Sleep(time.Second)
+		time.Sleep(10 * time.Second)
 	}
 }
 
@@ -200,6 +205,78 @@ var (
 	ssdpLogger     *log.Logger
 	rootDescXML    []byte
 )
+
+func childCount(path_ string) (uint, error) {
+	f, err := os.Open(path_)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	names, err := f.Readdirnames(-1)
+	if err != nil {
+		return 0, err
+	}
+	return uint(len(names)), nil
+}
+
+type ContentDirectoryService struct {
+	Host string
+}
+
+func (cds *ContentDirectoryService) ReadContainer(path_, parentID string) (ret []UPNPObject) {
+	dir, err := os.Open(path_)
+	if err != nil {
+		panic(err)
+	}
+	defer dir.Close()
+	fis, err := dir.Readdir(-1)
+	if err != nil {
+		panic(err)
+	}
+	for _, fi := range fis {
+		obj := UPNPObject{
+			ID:         path.Join(path_, fi.Name()),
+			Title:      fi.Name(),
+			Restricted: 1,
+			ParentID:   parentID,
+		}
+		if fi.IsDir() {
+			obj.XMLName.Local = "container"
+			childCount, err := childCount(path.Join(path_, fi.Name()))
+			if err != nil {
+				log.Println(err)
+			} else {
+				obj.Attrs = append(obj.Attrs, xml.Attr{
+					xml.Name{Local: "childCount"},
+					fmt.Sprintf("%u", childCount),
+				})
+			}
+			obj.Class = "object.container.storageFolder"
+		} else {
+			mimeType := mime.TypeByExtension(path.Ext(fi.Name()))
+			obj.XMLName.Local = "item"
+			obj.Class = "object.item." + strings.SplitN(mimeType, "/", 2)[0] + "Item"
+			values := url.Values{}
+			values.Set("path", path.Join(path_, fi.Name()))
+			url_ := &url.URL{
+				Scheme:   "http",
+				Host:     cds.Host,
+				Path:     resPath,
+				RawQuery: values.Encode(),
+			}
+			obj.Res = append(obj.Res, Resource{
+				ProtocolInfo: "http-get:*:" + mimeType + ":DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=017000 00000000000000000000000000000000",
+				URL:          url_.String(),
+				Attrs: []xml.Attr{
+					xml.Attr{xml.Name{Local: "size"}, strconv.FormatInt(fi.Size(), 10)},
+				},
+			})
+		}
+
+		ret = append(ret, obj)
+	}
+	return
+}
 
 func main() {
 	rootDeviceUUID = makeDeviceUuid()
@@ -279,35 +356,24 @@ func main() {
 			log.Println("browse args", msg)
 			path := msg.Args["ObjectID"]
 			if path == "0" {
-				path = "/"
+				path = "/mnt/data/towatch"
 			}
-			dir, err := os.Open(path)
-			if err != nil {
-				panic(err)
+			startingIndex, _ := strconv.ParseUint(msg.Args["StartingIndex"], 0, 64)
+			requestedCount, _ := strconv.ParseUint(msg.Args["RequestedCount"], 0, 64)
+			cds := ContentDirectoryService{"192.168.26.2"}
+			objs := cds.ReadContainer(path, msg.Args["ObjectID"])
+			totalMatches := len(objs)
+			objs = objs[startingIndex:]
+			if requestedCount != 0 && int(requestedCount) < len(objs) {
+				objs = objs[:requestedCount]
 			}
-			names, err := dir.Readdirnames(-1)
-			if err != nil {
-				panic(err)
-			}
-			result, err := xml.MarshalIndent(func() (ret []UPNPObject) {
-				for _, n := range names {
-					ret = append(ret, UPNPObject{
-						XMLName:    xml.Name{Local: "item"},
-						ID:         n,
-						ParentID:   msg.Args["ObjectID"],
-						Restricted: 1,
-						Class:      "object.item.videoItem",
-						Title:      n,
-					})
-				}
-				return
-			}(), "", "  ")
+			result, err := xml.MarshalIndent(objs, "", "  ")
 			if err != nil {
 				panic(err)
 			}
 			rmsg.Args = map[string]string{
-				"TotalMatches":   fmt.Sprintf("%d", len(names)),
-				"NumberReturned": fmt.Sprintf("%d", len(names)),
+				"TotalMatches":   fmt.Sprintf("%d", totalMatches),
+				"NumberReturned": fmt.Sprintf("%d", len(objs)),
 				"Result":         string(didl_lite(string(result))),
 			}
 		default:
@@ -329,18 +395,22 @@ func main() {
 
 type Resource struct {
 	XMLName      xml.Name `xml:"res"`
-	ProtocolInfo string   `xml:"protocolInfo"`
-	URL          string   `xml:",chardata"`
-	Size         int      `xml:"size,attr"`
-	Bitrate      int      `xml:"bitrate,attr"`
-	Duration     string   `xml:"duration,attr"`
+	Attrs        []xml.Attr
+	ProtocolInfo string `xml:"protocolInfo,attr"`
+	URL          string `xml:",chardata"`
+	/*
+		Size         int      `xml:"size,attr"`
+		Bitrate      int      `xml:"bitrate,attr"`
+		Duration     string   `xml:"duration,attr"`
+	*/
 }
 
 type UPNPObject struct {
 	XMLName    xml.Name
+	Attrs      []xml.Attr
 	ID         string `xml:"id,attr"`
 	ParentID   string `xml:"parentID,attr"`
-	Restricted int    `xml:"restricted,attr"`
+	Restricted int    `xml:"restricted,attr"` // indicates whether the object is modifiable
 	Class      string `xml:"upnp:class"`
 	Icon       string `xml:"upnp:icon"`
 	Title      string `xml:"dc:title"`
