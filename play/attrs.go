@@ -7,13 +7,16 @@ import (
 
 type Meh struct {
 	XMLName xml.Name
-	Attrs []xml.Attr `xml:",attr"`
+	Size 
+	//ChildCount *uint `xml:"childCount,attr"`
 }
 
 func main() {
+	size := uint64(137)
 	data, err := xml.Marshal(Meh{
-		Attrs: []xml.Attr{
-			xml.Attr{xml.Name{Local: "hi"}, "there"},
+		Size: &xml.Attr{
+			xml.Name{Local: "size"},
+			fmt.Sprint(size),
 		},
 	})
 	fmt.Println(string(data), err)

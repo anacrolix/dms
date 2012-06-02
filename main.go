@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	//"crypto/rand"
 	"encoding/xml"
+	"math/rand"
 	//"io/ioutil"
 	"fmt"
 	//"io"
+	"bitbucket.org/anacrolix/dms/ffmpeg"
 	"bitbucket.org/anacrolix/dms/soap"
+	"bitbucket.org/anacrolix/dms/ssdp"
 	"log"
 	"mime"
 	"net"
@@ -23,11 +27,16 @@ import (
 )
 
 const (
-	serverField         = "Linux/3.4 UPnP/1.1 DMS/1.0"
+	serverField         = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
 	rootDeviceType      = "urn:schemas-upnp-org:device:MediaServer:1"
 	rootDeviceModelName = "dms 1.0"
 	resPath             = "/res"
+	rootDescPath        = "/rootDesc.xml"
+	rootDevice          = "upnp:rootdevice"
+	maxAge              = "30"
 )
+
+//;DLNA.ORG_FLAGS=017000 00000000000000000000000000000000
 
 func makeDeviceUuid() string {
 	/*
@@ -75,6 +84,12 @@ var services = []service{
 		SCPDURL:     "/scpd/ContentDirectory.xml",
 		ControlURL:  "/ctl/ContentDirectory",
 	},
+	service{
+		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
+		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+		SCPDURL:     "/scpd/ConnectionManager.xml",
+		ControlURL:  "/ctl/ConnectionManager",
+	},
 }
 
 type root struct {
@@ -90,12 +105,28 @@ func usnFromTarget(target string) string {
 	return rootDeviceUUID + "::" + target
 }
 
-func targets() []string {
-	return append([]string{
-		"upnp:rootdevice",
+func devices() []string {
+	return []string{
 		"urn:schemas-upnp-org:device:MediaServer:1",
-		"urn:schemas-upnp-org:service:ContentDirectory:1",
-	}, rootDeviceUUID)
+	}
+}
+
+func serviceTypes() (ret []string) {
+	for _, s := range services {
+		ret = append(ret, s.ServiceType)
+	}
+	return
+}
+
+func targets() (ret []string) {
+	for _, a := range [][]string{
+		{rootDevice, rootDeviceUUID},
+		devices(),
+		serviceTypes(),
+	} {
+		ret = append(ret, a...)
+	}
+	return
 }
 
 func httpPort() int {
@@ -105,8 +136,8 @@ func httpPort() int {
 func makeNotifyMessage(locHost net.IP, target, nts string) []byte {
 	lines := [...][2]string{
 		{"HOST", ssdpAddr.String()},
-		{"CACHE-CONTROL", "max-age = 30"},
-		{"LOCATION", fmt.Sprintf("http://%s:%d/rootDesc.xml", locHost.String(), httpPort())},
+		{"CACHE-CONTROL", "max-age=30"},
+		{"LOCATION", fmt.Sprintf("http://%s:%d"+rootDescPath, locHost.String(), httpPort())},
 		{"NT", target},
 		{"NTS", nts},
 		{"SERVER", serverField},
@@ -123,15 +154,18 @@ func makeNotifyMessage(locHost net.IP, target, nts string) []byte {
 
 func notifyAlive(conn *net.UDPConn, host net.IP) {
 	for _, target := range targets() {
-		data := makeNotifyMessage(host, target, "ssdp:alive")
-		n, err := conn.WriteToUDP(data, ssdpAddr)
-		ssdpLogger.Println("sending", string(data))
-		if err != nil {
-			panic(err)
-		}
-		if n != len(data) {
-			panic(fmt.Sprintf("sent %d < %d bytes", n, len(data)))
-		}
+		go func(target string) {
+			time.Sleep(time.Duration(rand.Int63n(int64(100 * time.Millisecond))))
+			data := makeNotifyMessage(host, target, "ssdp:alive")
+			n, err := conn.WriteToUDP(data, ssdpAddr)
+			ssdpLogger.Println("sending", string(data))
+			if err != nil {
+				panic(err)
+			}
+			if n != len(data) {
+				panic(fmt.Sprintf("sent %d < %d bytes", n, len(data)))
+			}
+		}(target)
 	}
 }
 
@@ -139,6 +173,8 @@ func serveHTTP() {
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log.Println("got http request:", r)
+			w.Header().Set("Ext", "")
+			w.Header().Set("Server", serverField)
 			http.DefaultServeMux.ServeHTTP(w, r)
 		}),
 	}
@@ -163,6 +199,111 @@ func sSDPInterface(if_ net.Interface) {
 		panic(err)
 	}
 	f.Close()
+	go func() {
+		b := make([]byte, if_.MTU)
+		for {
+			n, retAddr, err := conn.ReadFromUDP(b)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(b[:n])))
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			if req.Method != "M-SEARCH" || req.Header.Get("man") != `"ssdp:discover"` {
+				continue
+			}
+			var mx uint
+			if req.Host == ssdp.McastAddr {
+				i, err := strconv.ParseUint(req.Header.Get("mx"), 0, 0)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				mx = uint(i)
+			} else {
+				mx = 1
+			}
+			for respTarg, count := range func(st string) (ret map[string]int) {
+				if st == "ssdp:all" {
+					ret := make(map[string]int)
+					ret[rootDevice] = 3
+					for _, d := range devices() {
+						ret[d] = 2
+					}
+					for _, k := range serviceTypes() {
+						ret[k] = 1
+					}
+				}
+				for _, t := range targets() {
+					if st == t {
+						ret = map[string]int{
+							t: 1,
+						}
+						break
+					}
+				}
+				return
+			}(req.Header.Get("st")) {
+				addrs, err := if_.Addrs()
+				if err != nil {
+					panic(err)
+				}
+				for _, addr := range addrs {
+					var addrIP net.IP
+					if ipnet, ok := addr.(*net.IPNet); ok {
+						addrIP = ipnet.IP
+					} else {
+						panic(addr)
+					}
+					resp := &http.Response{
+						StatusCode: 200,
+						ProtoMajor: 1,
+						ProtoMinor: 1,
+						Request:    req,
+						Header:     make(http.Header),
+					}
+					url := url.URL{
+						Scheme: "http",
+						Host: (&net.TCPAddr{
+							IP:   addrIP,
+							Port: httpPort(),
+						}).String(),
+						Path: rootDescPath,
+					}
+					for _, pair := range [...][2]string{
+						{"CACHE-CONTROL", "max-age=" + maxAge},
+						{"EXT", ""},
+						{"LOCATION", url.String()},
+						{"SERVER", serverField},
+						{"ST", respTarg},
+						{"USN", usnFromTarget(respTarg)},
+					} {
+						resp.Header.Set(pair[0], pair[1])
+					}
+					buf := &bytes.Buffer{}
+					if err := resp.Write(buf); err != nil {
+						panic(err)
+					}
+					for i := 0; i < count; i++ {
+						go func() {
+							time.Sleep(time.Duration(rand.Int63n(int64(time.Second) * int64(mx))))
+							ssdpLogger.Printf("%s -> %s\n%s", if_, retAddr, buf.String())
+							n, err := conn.WriteToUDP(buf.Bytes(), retAddr)
+							if err != nil {
+								panic(err)
+							}
+							if n != len(buf.Bytes()) {
+								panic(fmt.Sprint(n, len(buf.Bytes())))
+							}
+						}()
+					}
+				}
+			}
+		}
+	}()
 	for {
 		addrs, err := if_.Addrs()
 		if err != nil {
@@ -173,7 +314,6 @@ func sSDPInterface(if_ net.Interface) {
 			if addr4 == nil {
 				continue
 			}
-			log.Println(addr)
 			notifyAlive(conn, addr4)
 		}
 		time.Sleep(10 * time.Second)
@@ -219,11 +359,35 @@ func childCount(path_ string) (uint, error) {
 	return uint(len(names)), nil
 }
 
-type ContentDirectoryService struct {
-	Host string
+func durationToDIDLString(d time.Duration) string {
+	ns := d % time.Second
+	d /= time.Second
+	s := d % 60
+	d /= 60
+	m := d % 60
+	d /= 60
+	h := d
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%d:%02d:%02d.%09d", h, m, s, ns), "0"), ".")
 }
 
-func (cds *ContentDirectoryService) ReadContainer(path_, parentID string) (ret []UPNPObject) {
+func itemResExtra(path string) (bitrate uint, duration string) {
+	info, err := ffmpeg.Probe(path)
+	if err != nil {
+		log.Printf("error probing %s: %s", path, err)
+		return
+	}
+	if _, err = fmt.Sscan(info.Format["bit_rate"], &bitrate); err != nil {
+		panic(err)
+	}
+	var f float64
+	if _, err = fmt.Sscan(info.Format["duration"], &f); err != nil {
+		panic(err)
+	}
+	duration = durationToDIDLString(time.Duration(f * float64(time.Second)))
+	return
+}
+
+func ReadContainer(path_, parentID, host string) (ret []UPNPObject) {
 	dir, err := os.Open(path_)
 	if err != nil {
 		panic(err)
@@ -246,10 +410,7 @@ func (cds *ContentDirectoryService) ReadContainer(path_, parentID string) (ret [
 			if err != nil {
 				log.Println(err)
 			} else {
-				obj.Attrs = append(obj.Attrs, xml.Attr{
-					xml.Name{Local: "childCount"},
-					fmt.Sprintf("%u", childCount),
-				})
+				obj.ChildCount = childCount
 			}
 			obj.Class = "object.container.storageFolder"
 		} else {
@@ -260,17 +421,17 @@ func (cds *ContentDirectoryService) ReadContainer(path_, parentID string) (ret [
 			values.Set("path", path.Join(path_, fi.Name()))
 			url_ := &url.URL{
 				Scheme:   "http",
-				Host:     cds.Host,
+				Host:     host,
 				Path:     resPath,
 				RawQuery: values.Encode(),
 			}
-			obj.Res = append(obj.Res, Resource{
+			mainRes := Resource{
 				ProtocolInfo: "http-get:*:" + mimeType + ":DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=017000 00000000000000000000000000000000",
 				URL:          url_.String(),
-				Attrs: []xml.Attr{
-					xml.Attr{xml.Name{Local: "size"}, strconv.FormatInt(fi.Size(), 10)},
-				},
-			})
+				Size:         uint64(fi.Size()),
+			}
+			mainRes.Bitrate, mainRes.Duration = itemResExtra(path.Join(path_, fi.Name()))
+			obj.Res = append(obj.Res, mainRes)
 		}
 
 		ret = append(ret, obj)
@@ -312,7 +473,7 @@ func main() {
 	}
 	rootDescXML = append([]byte(`<?xml version="1.0"?>`), rootDescXML...)
 	log.Println(string(rootDescXML))
-	ssdpAddr, err = net.ResolveUDPAddr("udp4", "239.255.255.250:1900")
+	ssdpAddr, err = net.ResolveUDPAddr("udp4", ssdp.McastAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -328,9 +489,13 @@ func main() {
 	}
 	defer logFile.Close()
 	ssdpLogger = log.New(logFile, "", log.Ltime|log.Lmicroseconds)
-	http.HandleFunc("/rootDesc.xml", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(http.ResponseWriter, *http.Request) {
+		panic(nil)
+	})
+	http.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
 		w.Header().Set("content-length", fmt.Sprint(len(rootDescXML)))
+		w.Header().Set("server", serverField)
 		w.Write(rootDescXML)
 	})
 	http.HandleFunc("/ctl/ContentDirectory", func(w http.ResponseWriter, r *http.Request) {
@@ -358,32 +523,39 @@ func main() {
 			if path == "0" {
 				path = "/mnt/data/towatch"
 			}
-			startingIndex, _ := strconv.ParseUint(msg.Args["StartingIndex"], 0, 64)
-			requestedCount, _ := strconv.ParseUint(msg.Args["RequestedCount"], 0, 64)
-			cds := ContentDirectoryService{"192.168.26.2"}
-			objs := cds.ReadContainer(path, msg.Args["ObjectID"])
-			totalMatches := len(objs)
-			objs = objs[startingIndex:]
-			if requestedCount != 0 && int(requestedCount) < len(objs) {
-				objs = objs[:requestedCount]
-			}
-			result, err := xml.MarshalIndent(objs, "", "  ")
-			if err != nil {
-				panic(err)
-			}
-			rmsg.Args = map[string]string{
-				"TotalMatches":   fmt.Sprintf("%d", totalMatches),
-				"NumberReturned": fmt.Sprintf("%d", len(objs)),
-				"Result":         string(didl_lite(string(result))),
+			switch msg.Args["BrowseFlag"] {
+			case "BrowseDirectChildren":
+				startingIndex, _ := strconv.ParseUint(msg.Args["StartingIndex"], 0, 64)
+				requestedCount, _ := strconv.ParseUint(msg.Args["RequestedCount"], 0, 64)
+				objs := ReadContainer(path, msg.Args["ObjectID"], r.Host)
+				totalMatches := len(objs)
+				objs = objs[startingIndex:]
+				if requestedCount != 0 && int(requestedCount) < len(objs) {
+					objs = objs[:requestedCount]
+				}
+				result, err := xml.MarshalIndent(objs, "", "  ")
+				if err != nil {
+					panic(err)
+				}
+				rmsg.Args = map[string]string{
+					"TotalMatches":   fmt.Sprintf("%d", totalMatches),
+					"NumberReturned": fmt.Sprintf("%d", len(objs)),
+					"Result":         string(didl_lite(string(result))),
+				}
+			default:
+				panic(nil)
 			}
 		default:
 			panic(msg.Action)
 		}
 		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
+		w.Header().Set("Ext", "")
+		w.Header().Set("Server", serverField)
 		body, err := xml.MarshalIndent(rmsg.Wrap(), "", "  ")
 		if err != nil {
 			panic(err)
 		}
+		body = append([]byte(xml.Header), body...)
 		log.Println("response:", string(body))
 		if _, err := w.Write(body); err != nil {
 			panic(err)
@@ -395,26 +567,23 @@ func main() {
 
 type Resource struct {
 	XMLName      xml.Name `xml:"res"`
-	Attrs        []xml.Attr
-	ProtocolInfo string `xml:"protocolInfo,attr"`
-	URL          string `xml:",chardata"`
-	/*
-		Size         int      `xml:"size,attr"`
-		Bitrate      int      `xml:"bitrate,attr"`
-		Duration     string   `xml:"duration,attr"`
-	*/
+	ProtocolInfo string   `xml:"protocolInfo,attr"`
+	URL          string   `xml:",chardata"`
+	Size         uint64   `xml:"size,attr"`
+	Bitrate      uint     `xml:"bitrate,attr"`
+	Duration     string   `xml:"duration,attr"`
 }
 
 type UPNPObject struct {
 	XMLName    xml.Name
-	Attrs      []xml.Attr
 	ID         string `xml:"id,attr"`
 	ParentID   string `xml:"parentID,attr"`
 	Restricted int    `xml:"restricted,attr"` // indicates whether the object is modifiable
 	Class      string `xml:"upnp:class"`
-	Icon       string `xml:"upnp:icon"`
+	Icon       string `xml:"upnp:icon,omitempty"`
 	Title      string `xml:"dc:title"`
 	Res        []Resource
+	ChildCount uint `xml:"childCount,attr"`
 }
 
 func didl_lite(chardata string) string {
