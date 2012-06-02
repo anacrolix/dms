@@ -172,7 +172,7 @@ func notifyAlive(conn *net.UDPConn, host net.IP) {
 func serveHTTP() {
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Println("got http request:", r)
+			log.Printf("got http request: %#v", r)
 			w.Header().Set("Ext", "")
 			w.Header().Set("Server", serverField)
 			http.DefaultServeMux.ServeHTTP(w, r)
@@ -491,6 +491,13 @@ func main() {
 	ssdpLogger = log.New(logFile, "", log.Ltime|log.Lmicroseconds)
 	http.HandleFunc("/", func(http.ResponseWriter, *http.Request) {
 		panic(nil)
+	})
+	http.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			log.Println(err)
+		}
+		path := r.Form.Get("path")
+		http.ServeFile(w, r, path)
 	})
 	http.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
