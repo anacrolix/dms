@@ -1,17 +1,13 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	//"crypto/rand"
-	"encoding/xml"
-	"math/rand"
-	//"io/ioutil"
-	"fmt"
-	//"io"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
 	"bitbucket.org/anacrolix/dms/soap"
 	"bitbucket.org/anacrolix/dms/ssdp"
+	"bitbucket.org/anacrolix/dms/upnp"
+	"encoding/xml"
+	"flag"
+	"fmt"
 	"log"
 	"mime"
 	"net"
@@ -20,9 +16,7 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -32,7 +26,6 @@ const (
 	rootDeviceModelName = "dms 1.0"
 	resPath             = "/res"
 	rootDescPath        = "/rootDesc.xml"
-	rootDevice          = "upnp:rootdevice"
 	maxAge              = "30"
 )
 
@@ -84,25 +77,20 @@ var services = []service{
 		SCPDURL:     "/scpd/ContentDirectory.xml",
 		ControlURL:  "/ctl/ContentDirectory",
 	},
-	service{
-		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
-		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-		SCPDURL:     "/scpd/ConnectionManager.xml",
-		ControlURL:  "/ctl/ConnectionManager",
-	},
+	/*
+		service{
+			ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
+			ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+			SCPDURL:     "/scpd/ConnectionManager.xml",
+			ControlURL:  "/ctl/ConnectionManager",
+		},
+	*/
 }
 
 type root struct {
 	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:device-1-0 root"`
 	SpecVersion specVersion `xml:"specVersion"`
 	Device      device      `xml:"device"`
-}
-
-func usnFromTarget(target string) string {
-	if target == rootDeviceUUID {
-		return target
-	}
-	return rootDeviceUUID + "::" + target
 }
 
 func devices() []string {
@@ -117,56 +105,8 @@ func serviceTypes() (ret []string) {
 	}
 	return
 }
-
-func targets() (ret []string) {
-	for _, a := range [][]string{
-		{rootDevice, rootDeviceUUID},
-		devices(),
-		serviceTypes(),
-	} {
-		ret = append(ret, a...)
-	}
-	return
-}
-
 func httpPort() int {
 	return httpConn.Addr().(*net.TCPAddr).Port
-}
-
-func makeNotifyMessage(locHost net.IP, target, nts string) []byte {
-	lines := [...][2]string{
-		{"HOST", ssdpAddr.String()},
-		{"CACHE-CONTROL", "max-age=30"},
-		{"LOCATION", fmt.Sprintf("http://%s:%d"+rootDescPath, locHost.String(), httpPort())},
-		{"NT", target},
-		{"NTS", nts},
-		{"SERVER", serverField},
-		{"USN", usnFromTarget(target)},
-	}
-	buf := &bytes.Buffer{}
-	fmt.Fprint(buf, "NOTIFY * HTTP/1.1\r\n")
-	for _, pair := range lines {
-		fmt.Fprintf(buf, "%s: %s\r\n", pair[0], pair[1])
-	}
-	fmt.Fprint(buf, "\r\n")
-	return buf.Bytes()
-}
-
-func notifyAlive(conn *net.UDPConn, host net.IP) {
-	for _, target := range targets() {
-		go func(target string) {
-			time.Sleep(time.Duration(rand.Int63n(int64(100 * time.Millisecond))))
-			data := makeNotifyMessage(host, target, "ssdp:alive")
-			n, err := conn.WriteToUDP(data, ssdpAddr)
-			ssdpLogger.Println("sending", string(data))
-			if err != nil {
-				panic(err)
-			}
-			if n != len(data) {
-				panic(fmt.Sprintf("sent %d < %d bytes", n, len(data)))
-			}
-		}(target)
-	}
 }
 
 func serveHTTP() {
@@ -184,155 +124,26 @@ func serveHTTP() {
 	panic(nil)
 }
 
-func sSDPInterface(if_ net.Interface) {
-	conn, err := net.ListenMulticastUDP("udp4", &if_, ssdpAddr)
-	if err != nil {
-		panic(err)
-	}
-	defer conn.Close()
-	f, err := conn.File()
-	if err != nil {
-		panic(err)
-	}
-	fd := int(f.Fd())
-	if err := syscall.SetsockoptInt(fd, syscall.SOL_IP, syscall.IP_MULTICAST_TTL, 4); err != nil {
-		panic(err)
-	}
-	f.Close()
-	go func() {
-		b := make([]byte, if_.MTU)
-		for {
-			n, retAddr, err := conn.ReadFromUDP(b)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-			req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(b[:n])))
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-			if req.Method != "M-SEARCH" || req.Header.Get("man") != `"ssdp:discover"` {
-				continue
-			}
-			var mx uint
-			if req.Host == ssdp.McastAddr {
-				i, err := strconv.ParseUint(req.Header.Get("mx"), 0, 0)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				mx = uint(i)
-			} else {
-				mx = 1
-			}
-			for respTarg, count := range func(st string) (ret map[string]int) {
-				if st == "ssdp:all" {
-					ret := make(map[string]int)
-					ret[rootDevice] = 3
-					for _, d := range devices() {
-						ret[d] = 2
-					}
-					for _, k := range serviceTypes() {
-						ret[k] = 1
-					}
-				}
-				for _, t := range targets() {
-					if st == t {
-						ret = map[string]int{
-							t: 1,
-						}
-						break
-					}
-				}
-				return
-			}(req.Header.Get("st")) {
-				addrs, err := if_.Addrs()
-				if err != nil {
-					panic(err)
-				}
-				for _, addr := range addrs {
-					var addrIP net.IP
-					if ipnet, ok := addr.(*net.IPNet); ok {
-						addrIP = ipnet.IP
-					} else {
-						panic(addr)
-					}
-					resp := &http.Response{
-						StatusCode: 200,
-						ProtoMajor: 1,
-						ProtoMinor: 1,
-						Request:    req,
-						Header:     make(http.Header),
-					}
-					url := url.URL{
-						Scheme: "http",
-						Host: (&net.TCPAddr{
-							IP:   addrIP,
-							Port: httpPort(),
-						}).String(),
-						Path: rootDescPath,
-					}
-					for _, pair := range [...][2]string{
-						{"CACHE-CONTROL", "max-age=" + maxAge},
-						{"EXT", ""},
-						{"LOCATION", url.String()},
-						{"SERVER", serverField},
-						{"ST", respTarg},
-						{"USN", usnFromTarget(respTarg)},
-					} {
-						resp.Header.Set(pair[0], pair[1])
-					}
-					buf := &bytes.Buffer{}
-					if err := resp.Write(buf); err != nil {
-						panic(err)
-					}
-					for i := 0; i < count; i++ {
-						go func() {
-							time.Sleep(time.Duration(rand.Int63n(int64(time.Second) * int64(mx))))
-							ssdpLogger.Printf("%s -> %s\n%s", if_, retAddr, buf.String())
-							n, err := conn.WriteToUDP(buf.Bytes(), retAddr)
-							if err != nil {
-								panic(err)
-							}
-							if n != len(buf.Bytes()) {
-								panic(fmt.Sprint(n, len(buf.Bytes())))
-							}
-						}()
-					}
-				}
-			}
-		}
-	}()
-	for {
-		addrs, err := if_.Addrs()
-		if err != nil {
-			panic(err)
-		}
-		for _, addr := range addrs {
-			addr4 := addr.(*net.IPNet).IP.To4()
-			if addr4 == nil {
-				continue
-			}
-			notifyAlive(conn, addr4)
-		}
-		time.Sleep(10 * time.Second)
-	}
-}
-
 func doSSDP() {
-	active := map[int]bool{}
+	active := map[string]bool{}
 	for {
 		ifs, err := net.Interfaces()
 		if err != nil {
 			panic(err)
 		}
 		for _, if_ := range ifs {
-			if active[if_.Index] {
-				continue
+			if !active[if_.Name] {
+				s := ssdp.Server{
+					Interface: if_,
+					Devices:   devices(),
+					Services:  serviceTypes(),
+					Location:  location,
+					Server:    serverField,
+					UUID:      rootDeviceUUID,
+				}
+				go s.Serve()
 			}
-			active[if_.Index] = true
-			go sSDPInterface(if_)
+			active[if_.Name] = true
 		}
 		time.Sleep(time.Second)
 	}
@@ -341,9 +152,8 @@ func doSSDP() {
 var (
 	rootDeviceUUID string
 	httpConn       *net.TCPListener
-	ssdpAddr       *net.UDPAddr
-	ssdpLogger     *log.Logger
 	rootDescXML    []byte
+	rootObjectPath string
 )
 
 func childCount(path_ string) (uint, error) {
@@ -367,7 +177,10 @@ func durationToDIDLString(d time.Duration) string {
 	m := d % 60
 	d /= 60
 	h := d
-	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%d:%02d:%02d.%09d", h, m, s, ns), "0"), ".")
+	ret := fmt.Sprintf("%d:%02d:%02d.%09d", h, m, s, ns)
+	ret = strings.TrimRight(ret, "0")
+	ret = strings.TrimRight(ret, ".")
+	return ret
 }
 
 func itemResExtra(path string) (bitrate uint, duration string) {
@@ -379,18 +192,23 @@ func itemResExtra(path string) (bitrate uint, duration string) {
 	if _, err = fmt.Sscan(info.Format["bit_rate"], &bitrate); err != nil {
 		panic(err)
 	}
-	var f float64
-	if _, err = fmt.Sscan(info.Format["duration"], &f); err != nil {
-		panic(err)
+	if d := info.Format["duration"]; d != "N/A" {
+		var f float64
+		_, err = fmt.Sscan(info.Format["duration"], &f)
+		if err != nil {
+			log.Println("probed duration for %s: %s", path, err)
+		} else {
+			duration = durationToDIDLString(time.Duration(f * float64(time.Second)))
+		}
 	}
-	duration = durationToDIDLString(time.Duration(f * float64(time.Second)))
 	return
 }
 
 func ReadContainer(path_, parentID, host string) (ret []UPNPObject) {
 	dir, err := os.Open(path_)
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
 	defer dir.Close()
 	fis, err := dir.Readdir(-1)
@@ -439,8 +257,60 @@ func ReadContainer(path_, parentID, host string) (ret []UPNPObject) {
 	return
 }
 
+type Browse struct {
+	ObjectID       string
+	BrowseFlag     string
+	Filter         string
+	StartingIndex  int
+	RequestedCount int
+}
+
+func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host string) map[string]string {
+	switch sa.Action {
+	case "GetSortCapabilities":
+		return map[string]string{
+			"SortCaps": "dc:title",
+		}
+	case "Browse":
+		var browse Browse
+		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
+			panic(err)
+		}
+		path := browse.ObjectID
+		if path == "0" {
+			path = rootObjectPath
+		}
+		switch browse.BrowseFlag {
+		case "BrowseDirectChildren":
+			objs := ReadContainer(path, browse.ObjectID, host)
+			totalMatches := len(objs)
+			objs = objs[browse.StartingIndex:]
+			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
+				objs = objs[:browse.RequestedCount]
+			}
+			result, err := xml.MarshalIndent(objs, "", "  ")
+			if err != nil {
+				panic(err)
+			}
+			return map[string]string{
+				"TotalMatches":   fmt.Sprint(totalMatches),
+				"NumberReturned": fmt.Sprint(len(objs)),
+				"Result":         didl_lite(string(result)),
+			}
+		default:
+			log.Println("unhandled browse flag:", browse.BrowseFlag)
+		}
+	default:
+		log.Println("unhandled content directory action:", sa.Action)
+	}
+	return nil
+}
+
 func main() {
+	log.SetFlags(log.Ltime | log.Lshortfile)
 	rootDeviceUUID = makeDeviceUuid()
+	flag.StringVar(&rootObjectPath, "path", ".", "browse root path")
+	flag.Parse()
 	var err error
 	rootDescXML, err = xml.MarshalIndent(
 		root{
@@ -473,22 +343,15 @@ func main() {
 	}
 	rootDescXML = append([]byte(`<?xml version="1.0"?>`), rootDescXML...)
 	log.Println(string(rootDescXML))
-	ssdpAddr, err = net.ResolveUDPAddr("udp4", ssdp.McastAddr)
 	if err != nil {
 		panic(err)
 	}
-	httpConn, err = net.ListenTCP("tcp", &net.TCPAddr{})
+	httpConn, err = net.ListenTCP("tcp", &net.TCPAddr{Port: 1338})
 	if err != nil {
 		panic(err)
 	}
 	defer httpConn.Close()
 	log.Println("HTTP server on", httpConn.Addr())
-	logFile, err := os.Create("ssdp.log")
-	if err != nil {
-		panic(err)
-	}
-	defer logFile.Close()
-	ssdpLogger = log.New(logFile, "", log.Ltime|log.Lmicroseconds)
 	http.HandleFunc("/", func(http.ResponseWriter, *http.Request) {
 		panic(nil)
 	})
@@ -506,59 +369,40 @@ func main() {
 		w.Write(rootDescXML)
 	})
 	http.HandleFunc("/ctl/ContentDirectory", func(w http.ResponseWriter, r *http.Request) {
+		soapActionString := r.Header.Get("SOAPACTION")
+		soapAction, ok := upnp.ParseActionHTTPHeader(soapActionString)
+		if !ok {
+			log.Println("invalid soapaction:", soapActionString)
+			return
+		}
 		var env soap.Envelope
 		if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
 			panic(err)
 		}
-		msg := env.Parse()
-		serviceTypeParts := strings.Split(msg.ServiceType, ":")
-		if serviceTypeParts[len(serviceTypeParts)-2] != "ContentDirectory" {
-			panic(serviceTypeParts)
-		}
-		rmsg := soap.Message{
-			ServiceType: msg.ServiceType,
-			Action:      msg.Action + "Response",
-		}
-		switch msg.Action {
-		case "GetSortCapabilities":
-			rmsg.Args = map[string]string{
-				"SortCaps": "dc:title",
-			}
-		case "Browse":
-			log.Println("browse args", msg)
-			path := msg.Args["ObjectID"]
-			if path == "0" {
-				path = "/mnt/data/towatch"
-			}
-			switch msg.Args["BrowseFlag"] {
-			case "BrowseDirectChildren":
-				startingIndex, _ := strconv.ParseUint(msg.Args["StartingIndex"], 0, 64)
-				requestedCount, _ := strconv.ParseUint(msg.Args["RequestedCount"], 0, 64)
-				objs := ReadContainer(path, msg.Args["ObjectID"], r.Host)
-				totalMatches := len(objs)
-				objs = objs[startingIndex:]
-				if requestedCount != 0 && int(requestedCount) < len(objs) {
-					objs = objs[:requestedCount]
-				}
-				result, err := xml.MarshalIndent(objs, "", "  ")
-				if err != nil {
-					panic(err)
-				}
-				rmsg.Args = map[string]string{
-					"TotalMatches":   fmt.Sprintf("%d", totalMatches),
-					"NumberReturned": fmt.Sprintf("%d", len(objs)),
-					"Result":         string(didl_lite(string(result))),
-				}
-			default:
-				panic(nil)
-			}
-		default:
-			panic(msg.Action)
-		}
 		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 		w.Header().Set("Ext", "")
 		w.Header().Set("Server", serverField)
-		body, err := xml.MarshalIndent(rmsg.Wrap(), "", "  ")
+		actionResponseXML, err := xml.MarshalIndent(func() soap.Action {
+			argMap := contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host)
+			args := make([]soap.Arg, 0, len(argMap))
+			for argName, value := range argMap {
+				args = append(args, soap.Arg{
+					xml.Name{Local: argName},
+					value,
+				})
+			}
+			return soap.Action{
+				xml.Name{
+					Space: soapAction.ServiceURN.String(),
+					Local: soapAction.Action + "Response",
+				},
+				args,
+			}
+		}(), "", "  ")
+		if err != nil {
+			panic(err)
+		}
+		body, err := xml.MarshalIndent(soap.NewEnvelope(actionResponseXML), "", "  ")
 		if err != nil {
 			panic(err)
 		}
@@ -601,4 +445,16 @@ func didl_lite(chardata string) string {
 		` xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">` +
 		chardata +
 		`</DIDL-Lite>`
+}
+
+func location(ip net.IP) string {
+	url := url.URL{
+		Scheme: "http",
+		Host: (&net.TCPAddr{
+			IP:   ip,
+			Port: httpPort(),
+		}).String(),
+		Path: rootDescPath,
+	}
+	return url.String()
 }

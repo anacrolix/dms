@@ -1,31 +1,24 @@
 package main
 
 import (
+	"bitbucket.org/anacrolix/dms/soap"
 	"encoding/xml"
 	"fmt"
-	"os"
 	"io/ioutil"
+	"os"
 )
 
-type Arg struct {
-	XMLName xml.Name
-	Value string `xml:",chardata"`
+type Browse struct {
+	ObjectID       string
+	BrowseFlag     string
+	Filter         string
+	StartingIndex  int
+	RequestedCount int
 }
 
-type Action struct {
-	XMLName xml.Name
-	Args []Arg `xml:",any"`
-	//Noob []Arg
-}
-
-type Body struct {
-	Action Action `xml:",any"`
-}
-
-type envelope struct {
-	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Envelope"`
-	EncodingStyle string `xml:"encodingStyle,attr"`
-	Body Body `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"`
+type GetSortCapabilitiesResponse struct {
+	XMLName  xml.Name `xml:"urn:schemas-upnp-org:service:ContentDirectory:1 GetSortCapabilitiesResponse"`
+	SortCaps string
 }
 
 func main() {
@@ -33,38 +26,24 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	var env envelope
+	var env soap.Envelope
 	if err := xml.Unmarshal(raw, &env); err != nil {
 		panic(err)
 	}
 	fmt.Println(env)
+	var browse Browse
+	err = xml.Unmarshal([]byte(env.Body.Action), &browse)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(browse)
 	raw, err = xml.MarshalIndent(
-		envelope{
-			EncodingStyle: "http://schemas.xmlsoap.org/soap/envelope/",
-			Body: Body{
-				Action{
-					xml.Name{
-						Space: env.Body.Action.XMLName.Space,
-						Local: env.Body.Action.XMLName.Local + "Response",
-					},
-					[]Arg{
-						Arg{
-							xml.Name{
-								Local: "SortCaps",
-							},
-							"dc:title",
-						},
-						Arg{
-							xml.Name{Local: "lol"},
-							"meh",
-						},
-					},
-				},
-			},
-		}, "", "  ")
+		GetSortCapabilitiesResponse{
+			SortCaps: "dc:title",
+		},
+		"", "  ")
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(string(raw))
 }
-

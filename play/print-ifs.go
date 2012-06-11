@@ -17,7 +17,7 @@ func main() {
 			panic(err)
 		}
 		for _, addr := range addrs {
-			log.Printf("\t%s\n", addr)
+			log.Printf("\t%s %s\n", addr.Network(), addr)
 		}
 		mcastAddrs, err := if_.MulticastAddrs()
 		if err != nil {
