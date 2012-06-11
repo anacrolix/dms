@@ -1,16 +1,16 @@
 package ffmpeg
 
 import (
-	"io"
+	"bufio"
 	"errors"
 	"fmt"
-	"bufio"
-	"strings"
+	"io"
 	"os/exec"
+	"strings"
 )
 
 type Info struct {
-	Format map[string]string
+	Format  map[string]string
 	Streams []map[string]string
 }
 
@@ -97,4 +97,3 @@ func Probe(path string) (*Info, error) {
 	}
 	return info, nil
 }
-

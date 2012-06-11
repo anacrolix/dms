@@ -1,9 +1,9 @@
 package main
 
 import (
-	"net/url"
 	"fmt"
 	"log"
+	"net/url"
 )
 
 func main() {
@@ -13,4 +13,3 @@ func main() {
 	}
 	fmt.Printf("%#v\n", url_)
 }
-

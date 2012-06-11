@@ -7,7 +7,7 @@ import (
 
 type Meh struct {
 	XMLName xml.Name
-	Size 
+	Size
 	//ChildCount *uint `xml:"childCount,attr"`
 }
 
@@ -21,4 +21,3 @@ func main() {
 	})
 	fmt.Println(string(data), err)
 }
-

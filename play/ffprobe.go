@@ -1,10 +1,10 @@
 package main
 
 import (
-	"log"
+	"bitbucket.org/anacrolix/dms/ffmpeg"
 	"flag"
 	"fmt"
-	"bitbucket.org/anacrolix/dms/ffmpeg"
+	"log"
 )
 
 func main() {
@@ -14,4 +14,3 @@ func main() {
 		fmt.Println(ffmpeg.Probe(path))
 	}
 }
-

@@ -10,17 +10,16 @@ func main() {
 		j := i
 		go func() {
 			fmt.Print(j)
-			ch<-struct{}{}
+			ch <- struct{}{}
 		}()
 	}
 	for i := 5; i < 10; i++ {
 		go func() {
 			fmt.Print(i)
-			ch<-struct{}{}
+			ch <- struct{}{}
 		}()
 	}
 	for i := 0; i < 10; i++ {
 		<-ch
 	}
 }
-
