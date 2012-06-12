@@ -2,7 +2,7 @@ package dlna
 
 import (
 	"fmt"
-	"math"
+	//"math"
 	"strconv"
 	"strings"
 	"time"
@@ -84,8 +84,6 @@ func ParseNPTRange(s string) (ret NPTRange, err error) {
 		if err != nil {
 			return
 		}
-	} else {
-		ret.End = math.MinInt64
 	}
 	return
 }

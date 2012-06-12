@@ -11,6 +11,7 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"mime"
 	"net"
@@ -20,7 +21,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -351,8 +351,9 @@ func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host strin
 func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 	w.Header().Set(dlna.TransferModeDomain, "Streaming")
 	dlnaRange := r.Header.Get(dlna.TimeSeekRangeDomain)
-	var start, end string
+	var start, length string
 	if dlnaRange != "" {
+		w.Header().Set(dlna.TimeSeekRangeDomain, dlnaRange)
 		if !strings.HasPrefix(dlnaRange, "npt=") {
 			log.Println("bad range:", dlnaRange)
 			return
@@ -362,21 +363,35 @@ func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 			log.Println("bad range:", dlnaRange)
 			return
 		}
-		start = strconv.FormatFloat(float64(range_.Start)/float64(time.Second), 'f', -1, 64)
-		if range_.End >= 0 {
-			end = strconv.FormatFloat(float64(range_.End)/float64(time.Second), 'f', -1, 64)
+		start = misc.FormatDurationSexagesimal(range_.Start)
+		if range_.End > 0 {
+			length = misc.FormatDurationSexagesimal(range_.End - range_.Start)
 		}
-		w.Header().Set(dlna.TimeSeekRangeDomain, range_.String())
 	}
-	cmd := exec.Command("/media/data/pydlnadms/transcode", path_, start, end)
-	cmd.Stdout = w
+	args := []string{path_}
+	if start != "" {
+		args = append(args, []string{"-ss", start}...)
+	}
+	if length != "" {
+		args = append(args, []string{"-t", length}...)
+	}
+	log.Println(args)
+	cmd := exec.Command("/media/data/pydlnadms/transcode", args...)
+	p, err := cmd.StdoutPipe()
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		log.Println(err)
 		return
 	}
 	w.WriteHeader(206)
-	err := cmd.Wait()
+	go func() {
+		_, err := io.Copy(w, p)
+		if err != nil {
+			log.Println(err)
+		}
+		p.Close()
+	}()
+	err = cmd.Wait()
 	if err != nil {
 		log.Println(err)
 	}
