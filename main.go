@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bitbucket.org/anacrolix/dms/dlna"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
+	"bitbucket.org/anacrolix/dms/misc"
 	"bitbucket.org/anacrolix/dms/soap"
 	"bitbucket.org/anacrolix/dms/ssdp"
 	"bitbucket.org/anacrolix/dms/upnp"
+	"bitbucket.org/anacrolix/dms/upnpav"
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -14,8 +17,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/user"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,8 +33,6 @@ const (
 	rootDescPath        = "/rootDesc.xml"
 	maxAge              = "30"
 )
-
-//;DLNA.ORG_FLAGS=017000 00000000000000000000000000000000
 
 func makeDeviceUuid() string {
 	/*
@@ -112,7 +115,6 @@ func httpPort() int {
 func serveHTTP() {
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Printf("got http request: %#v", r)
 			w.Header().Set("Ext", "")
 			w.Header().Set("Server", serverField)
 			http.DefaultServeMux.ServeHTTP(w, r)
@@ -133,6 +135,7 @@ func doSSDP() {
 		}
 		for _, if_ := range ifs {
 			if !active[if_.Name] {
+				log.Println("starting SSDP server on", if_.Name)
 				s := ssdp.Server{
 					Interface: if_,
 					Devices:   devices(),
@@ -141,9 +144,9 @@ func doSSDP() {
 					Server:    serverField,
 					UUID:      rootDeviceUUID,
 				}
+				active[if_.Name] = true
 				go s.Serve()
 			}
-			active[if_.Name] = true
 		}
 		time.Sleep(time.Second)
 	}
@@ -156,30 +159,22 @@ var (
 	rootObjectPath string
 )
 
-func childCount(path_ string) (uint, error) {
+func childCount(path_ string) int {
 	f, err := os.Open(path_)
 	if err != nil {
-		return 0, err
+		log.Println(err)
+		return 0
 	}
 	defer f.Close()
-	names, err := f.Readdirnames(-1)
+	fis, err := f.Readdir(-1)
 	if err != nil {
-		return 0, err
+		log.Println(err)
+		return 0
 	}
-	return uint(len(names)), nil
-}
-
-func durationToDIDLString(d time.Duration) string {
-	ns := d % time.Second
-	d /= time.Second
-	s := d % 60
-	d /= 60
-	m := d % 60
-	d /= 60
-	h := d
-	ret := fmt.Sprintf("%d:%02d:%02d.%09d", h, m, s, ns)
-	ret = strings.TrimRight(ret, "0")
-	ret = strings.TrimRight(ret, ".")
+	ret := 0
+	for _, fi := range fis {
+		ret += len(fileEntries(fi, path_))
+	}
 	return ret
 }
 
@@ -196,15 +191,96 @@ func itemResExtra(path string) (bitrate uint, duration string) {
 		var f float64
 		_, err = fmt.Sscan(info.Format["duration"], &f)
 		if err != nil {
-			log.Println("probed duration for %s: %s", path, err)
+			log.Printf("probed duration for %s: %s\n", path, err)
 		} else {
-			duration = durationToDIDLString(time.Duration(f * float64(time.Second)))
+			duration = misc.FormatDurationSexagesimal(time.Duration(f * float64(time.Second)))
 		}
 	}
 	return
 }
 
-func ReadContainer(path_, parentID, host string) (ret []UPNPObject) {
+func entryObject(parentID, host string, entry CDSEntry) interface{} {
+	path_ := path.Join(entry.ParentPath, entry.FileInfo.Name())
+	obj := upnpav.Object{
+		ID:         path_,
+		Title:      entry.Title,
+		Restricted: 1,
+		ParentID:   parentID,
+	}
+	if entry.FileInfo.IsDir() {
+		obj.Class = "object.container.storageFolder"
+		return upnpav.Container{
+			Object:     obj,
+			ChildCount: childCount(path_),
+		}
+	}
+	mimeType := func() string {
+		if entry.Transcode {
+			return "video/mpeg"
+		}
+		return mime.TypeByExtension(path.Ext(entry.FileInfo.Name()))
+	}()
+	obj.Class = "object.item." + strings.SplitN(mimeType, "/", 2)[0] + "Item"
+	values := url.Values{}
+	values.Set("path", path_)
+	if entry.Transcode {
+		values.Set("transcode", "t")
+	}
+	url_ := &url.URL{
+		Scheme:   "http",
+		Host:     host,
+		Path:     resPath,
+		RawQuery: values.Encode(),
+	}
+	cf := dlna.ContentFeatures{}
+	if entry.Transcode {
+		cf.SupportTimeSeek = true
+		cf.Transcoded = true
+	} else {
+		cf.SupportRange = true
+	}
+	mainRes := upnpav.Resource{
+		ProtocolInfo: "http-get:*:" + mimeType + ":" + cf.String(),
+		URL:          url_.String(),
+		Size:         uint64(entry.FileInfo.Size()),
+	}
+	mainRes.Bitrate, mainRes.Duration = itemResExtra(path_)
+	return upnpav.Item{
+		Object: obj,
+		Res:    []upnpav.Resource{mainRes},
+	}
+}
+
+func fileEntries(fileInfo os.FileInfo, parentPath string) []CDSEntry {
+	if fileInfo.IsDir() {
+		return []CDSEntry{
+			{fileInfo.Name(), fileInfo, parentPath, false},
+		}
+	}
+	mimeType := mime.TypeByExtension(path.Ext(fileInfo.Name()))
+	mimeTypeType := strings.SplitN(mimeType, "/", 2)[0]
+	ret := []CDSEntry{
+		{fileInfo.Name(), fileInfo, parentPath, false},
+	}
+	if mimeTypeType == "video" {
+		ret = append(ret, CDSEntry{
+			fileInfo.Name() + "/transcode",
+			fileInfo,
+			parentPath,
+			true,
+		})
+	}
+	return ret
+}
+
+type CDSEntry struct {
+	Title      string
+	FileInfo   os.FileInfo
+	ParentPath string
+	Transcode  bool
+}
+
+func ReadContainer(path_, parentID, host string) (ret []interface{}) {
 	dir, err := os.Open(path_)
 	if err != nil {
 		log.Println(err)
@@ -216,43 +292,9 @@ func ReadContainer(path_, parentID, host string) (ret []UPNPObject) {
 		panic(err)
 	}
 	for _, fi := range fis {
-		obj := UPNPObject{
-			ID:         path.Join(path_, fi.Name()),
-			Title:      fi.Name(),
-			Restricted: 1,
-			ParentID:   parentID,
+		for _, entry := range fileEntries(fi, path_) {
+			ret = append(ret, entryObject(parentID, host, entry))
 		}
-		if fi.IsDir() {
-			obj.XMLName.Local = "container"
-			childCount, err := childCount(path.Join(path_, fi.Name()))
-			if err != nil {
-				log.Println(err)
-			} else {
-				obj.ChildCount = childCount
-			}
-			obj.Class = "object.container.storageFolder"
-		} else {
-			mimeType := mime.TypeByExtension(path.Ext(fi.Name()))
-			obj.XMLName.Local = "item"
-			obj.Class = "object.item." + strings.SplitN(mimeType, "/", 2)[0] + "Item"
-			values := url.Values{}
-			values.Set("path", path.Join(path_, fi.Name()))
-			url_ := &url.URL{
-				Scheme:   "http",
-				Host:     host,
-				Path:     resPath,
-				RawQuery: values.Encode(),
-			}
-			mainRes := Resource{
-				ProtocolInfo: "http-get:*:" + mimeType + ":DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=017000 00000000000000000000000000000000",
-				URL:          url_.String(),
-				Size:         uint64(fi.Size()),
-			}
-			mainRes.Bitrate, mainRes.Duration = itemResExtra(path.Join(path_, fi.Name()))
-			obj.Res = append(obj.Res, mainRes)
-		}
-
-		ret = append(ret, obj)
 	}
 	return
 }
@@ -304,6 +346,40 @@ func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host strin
 		log.Println("unhandled content directory action:", sa.Action)
 	}
 	return nil
+}
+
+func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
+	w.Header().Set(dlna.TransferModeDomain, "Streaming")
+	dlnaRange := r.Header.Get(dlna.TimeSeekRangeDomain)
+	var start, end string
+	if dlnaRange != "" {
+		if !strings.HasPrefix(dlnaRange, "npt=") {
+			log.Println("bad range:", dlnaRange)
+			return
+		}
+		range_, err := dlna.ParseNPTRange(dlnaRange[len("npt="):])
+		if err != nil {
+			log.Println("bad range:", dlnaRange)
+			return
+		}
+		start = strconv.FormatFloat(float64(range_.Start)/float64(time.Second), 'f', -1, 64)
+		if range_.End >= 0 {
+			end = strconv.FormatFloat(float64(range_.End)/float64(time.Second), 'f', -1, 64)
+		}
+		w.Header().Set(dlna.TimeSeekRangeDomain, range_.String())
+	}
+	cmd := exec.Command("/media/data/pydlnadms/transcode", path_, start, end)
+	cmd.Stdout = w
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		log.Println(err)
+		return
+	}
+	w.WriteHeader(206)
+	err := cmd.Wait()
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func main() {
@@ -360,7 +436,12 @@ func main() {
 			log.Println(err)
 		}
 		path := r.Form.Get("path")
-		http.ServeFile(w, r, path)
+		if r.Form.Get("transcode") == "" {
+			log.Printf("serving file %s: %s\n", r.Header.Get("Range"), path)
+			http.ServeFile(w, r, path)
+			return
+		}
+		serveDLNATranscode(w, r, path)
 	})
 	http.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
@@ -375,6 +456,7 @@ func main() {
 			log.Println("invalid soapaction:", soapActionString)
 			return
 		}
+		log.Printf("SOAP request from %s: %s\n", r.RemoteAddr, soapAction)
 		var env soap.Envelope
 		if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
 			panic(err)
@@ -407,34 +489,12 @@ func main() {
 			panic(err)
 		}
 		body = append([]byte(xml.Header), body...)
-		log.Println("response:", string(body))
 		if _, err := w.Write(body); err != nil {
 			panic(err)
 		}
 	})
 	go serveHTTP()
 	doSSDP()
-}
-
-type Resource struct {
-	XMLName      xml.Name `xml:"res"`
-	ProtocolInfo string   `xml:"protocolInfo,attr"`
-	URL          string   `xml:",chardata"`
-	Size         uint64   `xml:"size,attr"`
-	Bitrate      uint     `xml:"bitrate,attr"`
-	Duration     string   `xml:"duration,attr"`
-}
-
-type UPNPObject struct {
-	XMLName    xml.Name
-	ID         string `xml:"id,attr"`
-	ParentID   string `xml:"parentID,attr"`
-	Restricted int    `xml:"restricted,attr"` // indicates whether the object is modifiable
-	Class      string `xml:"upnp:class"`
-	Icon       string `xml:"upnp:icon,omitempty"`
-	Title      string `xml:"dc:title"`
-	Res        []Resource
-	ChildCount uint `xml:"childCount,attr"`
 }
 
 func didl_lite(chardata string) string {
