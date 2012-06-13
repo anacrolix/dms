@@ -53,7 +53,7 @@ func readLine(r *bufio.Reader) (line string, err error) {
 	return
 }
 
-func Probe(path string) (*Info, error) {
+func Probe(path string) (info *Info, err error) {
 	cmd := exec.Command("ffprobe", "-show_format", "-show_streams", path)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -63,7 +63,16 @@ func Probe(path string) (*Info, error) {
 		return nil, err
 	}
 	r := bufio.NewReader(out)
-	info := &Info{}
+	info = &Info{}
+	defer func() {
+		out.Close()
+	}()
+	defer func() {
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			err = waitErr
+		}
+	}()
 	for {
 		line, err := readLine(r)
 		if err == io.EOF {
