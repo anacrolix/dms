@@ -350,51 +350,58 @@ func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host strin
 
 func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 	w.Header().Set(dlna.TransferModeDomain, "Streaming")
-	dlnaRange := r.Header.Get(dlna.TimeSeekRangeDomain)
-	var start, length string
-	if dlnaRange != "" {
-		w.Header().Set(dlna.TimeSeekRangeDomain, dlnaRange)
-		if !strings.HasPrefix(dlnaRange, "npt=") {
-			log.Println("bad range:", dlnaRange)
+	w.Header().Set("content-type", "video/mpeg")
+	w.Header().Set(dlna.ContentFeaturesDomain, (dlna.ContentFeatures{
+		Transcoded:      true,
+		SupportTimeSeek: true,
+	}).String())
+	dlnaRangeHeader := r.Header.Get(dlna.TimeSeekRangeDomain)
+	var nptStart, nptLength string
+	if dlnaRangeHeader != "" {
+		if !strings.HasPrefix(dlnaRangeHeader, "npt=") {
+			log.Println("bad range:", dlnaRangeHeader)
 			return
 		}
-		range_, err := dlna.ParseNPTRange(dlnaRange[len("npt="):])
+		dlnaRange, err := dlna.ParseNPTRange(dlnaRangeHeader[len("npt="):])
 		if err != nil {
-			log.Println("bad range:", dlnaRange)
+			log.Println("bad range:", dlnaRangeHeader)
 			return
 		}
-		start = misc.FormatDurationSexagesimal(range_.Start)
-		if range_.End > 0 {
-			length = misc.FormatDurationSexagesimal(range_.End - range_.Start)
+		nptStart = dlna.FormatNPTTime(dlnaRange.Start)
+		if dlnaRange.End > 0 {
+			nptLength = dlna.FormatNPTTime(dlnaRange.End - dlnaRange.Start)
 		}
+		w.Header().Set(dlna.TimeSeekRangeDomain, dlnaRangeHeader+"/*")
 	}
 	args := []string{path_}
-	if start != "" {
-		args = append(args, []string{"-ss", start}...)
+	if nptStart != "" {
+		args = append(args, []string{"-ss", nptStart}...)
 	}
-	if length != "" {
-		args = append(args, []string{"-t", length}...)
+	if nptLength != "" {
+		args = append(args, []string{"-t", nptLength}...)
 	}
 	log.Println(args)
 	cmd := exec.Command("/media/data/pydlnadms/transcode", args...)
 	p, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		log.Println(err)
 		return
 	}
-	w.WriteHeader(206)
-	go func() {
-		_, err := io.Copy(w, p)
-		if err != nil {
+	defer func() {
+		if err := cmd.Wait(); err != nil {
 			log.Println(err)
 		}
-		p.Close()
 	}()
-	err = cmd.Wait()
-	if err != nil {
-		log.Println(err)
+	w.WriteHeader(206)
+	if n, err := io.Copy(w, p); err != nil {
+		log.Println("after copying", n, "bytes:", err)
 	}
+	p.Close()
 }
 
 func main() {
