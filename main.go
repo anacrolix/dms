@@ -380,28 +380,21 @@ func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 	if nptLength != "" {
 		args = append(args, []string{"-t", nptLength}...)
 	}
-	log.Println(args)
 	cmd := exec.Command("/media/data/pydlnadms/transcode", args...)
 	p, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	defer p.Close()
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		log.Println(err)
 		return
 	}
-	defer func() {
-		if err := cmd.Wait(); err != nil {
-			log.Println(err)
-		}
-	}()
+	defer cmd.Wait()
 	w.WriteHeader(206)
-	if n, err := io.Copy(w, p); err != nil {
-		log.Println("after copying", n, "bytes:", err)
-	}
-	p.Close()
+	io.Copy(w, p)
 }
 
 func main() {
