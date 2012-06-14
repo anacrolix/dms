@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
+	//"os/exec"
 	"os/user"
 	"path"
 	"strings"
@@ -184,9 +184,7 @@ func itemResExtra(path string) (bitrate uint, duration string) {
 		log.Printf("error probing %s: %s", path, err)
 		return
 	}
-	if _, err = fmt.Sscan(info.Format["bit_rate"], &bitrate); err != nil {
-		panic(err)
-	}
+	fmt.Sscan(info.Format["bit_rate"], &bitrate)
 	if d := info.Format["duration"]; d != "N/A" {
 		var f float64
 		_, err = fmt.Sscan(info.Format["duration"], &f)
@@ -373,26 +371,12 @@ func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 		}
 		w.Header().Set(dlna.TimeSeekRangeDomain, dlnaRangeHeader+"/*")
 	}
-	args := []string{path_}
-	if nptStart != "" {
-		args = append(args, []string{"-ss", nptStart}...)
-	}
-	if nptLength != "" {
-		args = append(args, []string{"-t", nptLength}...)
-	}
-	cmd := exec.Command("/media/data/pydlnadms/transcode", args...)
-	p, err := cmd.StdoutPipe()
+	p, err := misc.Transcode(path_, nptStart, nptLength)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	defer p.Close()
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		log.Println(err)
-		return
-	}
-	defer cmd.Wait()
 	w.WriteHeader(206)
 	io.Copy(w, p)
 }

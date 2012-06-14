@@ -64,9 +64,7 @@ func Probe(path string) (info *Info, err error) {
 	}
 	r := bufio.NewReader(out)
 	info = &Info{}
-	defer func() {
-		out.Close()
-	}()
+	defer out.Close()
 	defer func() {
 		waitErr := cmd.Wait()
 		if waitErr != nil {
