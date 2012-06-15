@@ -1,19 +1,19 @@
 package misc
 
 import (
-	"os/exec"
-	"os"
-	"log"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
-	"strconv"
 	"io"
+	"log"
+	"os"
+	"os/exec"
+	"strconv"
 )
 
 func streamArgs(s map[string]string) (ret []string) {
 	defer func() {
 		if len(ret) != 0 {
 			ret = append(ret, []string{
-				"-map", "0:"+s["index"],
+				"-map", "0:" + s["index"],
 			}...)
 		}
 	}()
@@ -84,4 +84,3 @@ func Transcode(path, ss, t string) (r io.ReadCloser, err error) {
 	}()
 	return
 }
-

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"time"
 	"io"
 	"os"
 	"os/exec"
+	"time"
 )
 
 func main() {
@@ -23,5 +23,3 @@ func main() {
 		panic(err)
 	}
 }
-
-

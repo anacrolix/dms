@@ -1,11 +1,11 @@
 package main
 
 import (
-	"log"
-	"time"
 	"io"
+	"log"
 	"os"
 	"os/exec"
+	"time"
 )
 
 func main() {
@@ -29,5 +29,3 @@ func main() {
 		panic(err)
 	}
 }
-
-

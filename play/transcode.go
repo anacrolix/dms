@@ -1,12 +1,12 @@
 package main
 
 import (
+	"bitbucket.org/anacrolix/dms/misc"
 	"bufio"
 	"flag"
-	"log"
 	"io"
+	"log"
 	"os"
-	"../misc"
 	"time"
 )
 
@@ -33,4 +33,3 @@ func main() {
 	go r.Close()
 	time.Sleep(time.Second)
 }
-

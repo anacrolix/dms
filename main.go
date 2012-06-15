@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"syscall"
 	//"os/exec"
 	"os/user"
 	"path"
@@ -369,6 +370,8 @@ func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 		if dlnaRange.End > 0 {
 			nptLength = dlna.FormatNPTTime(dlnaRange.End - dlnaRange.Start)
 		}
+		// passing an NPT duration seems to cause trouble
+		// so just pass the "iono" duration
 		w.Header().Set(dlna.TimeSeekRangeDomain, dlnaRangeHeader+"/*")
 	}
 	p, err := misc.Transcode(path_, nptStart, nptLength)
@@ -378,7 +381,17 @@ func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 	}
 	defer p.Close()
 	w.WriteHeader(206)
-	io.Copy(w, p)
+	if n, err := io.Copy(w, p); err != nil {
+		// not an error if the peer closes the connection
+		func() {
+			if opErr, ok := err.(*net.OpError); ok {
+				if opErr.Err == syscall.EPIPE {
+					return
+				}
+			}
+			log.Println("after copying", n, "bytes:", err)
+		}()
+	}
 }
 
 func main() {
@@ -386,6 +399,11 @@ func main() {
 	rootDeviceUUID = makeDeviceUuid()
 	flag.StringVar(&rootObjectPath, "path", ".", "browse root path")
 	flag.Parse()
+	if flag.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "%s: %s\n", "unexpected positional arguments", flag.Args())
+		flag.Usage()
+		os.Exit(2)
+	}
 	var err error
 	rootDescXML, err = xml.MarshalIndent(
 		root{
