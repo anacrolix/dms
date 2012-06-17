@@ -8,6 +8,7 @@ import (
 	"bitbucket.org/anacrolix/dms/ssdp"
 	"bitbucket.org/anacrolix/dms/upnp"
 	"bitbucket.org/anacrolix/dms/upnpav"
+	"crypto/md5"
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -18,11 +19,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"syscall"
-	//"os/exec"
 	"os/user"
 	"path"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -36,14 +36,12 @@ const (
 )
 
 func makeDeviceUuid() string {
-	/*
-		buf := make([]byte, 16)
-		if _, err := io.ReadFull(rand.Reader, buf); err != nil {
-			panic(err)
-		}
-	*/
-	var buf [16]byte
-	return fmt.Sprintf("uuid:%x-%x-%x-%x-%x", buf[:4], buf[4:6], buf[6:8], buf[8:10], buf[10:])
+	h := md5.New()
+	if _, err := io.WriteString(h, friendlyName); err != nil {
+		panic(err)
+	}
+	buf := h.Sum(nil)
+	return fmt.Sprintf("uuid:%x-%x-%x-%x-%x", buf[:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
 }
 
 type specVersion struct {
@@ -158,6 +156,7 @@ var (
 	httpConn       *net.TCPListener
 	rootDescXML    []byte
 	rootObjectPath string
+	friendlyName   string
 )
 
 func childCount(path_ string) int {
@@ -396,6 +395,19 @@ func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
 
 func main() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
+	friendlyName = fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
+		user, err := user.Current()
+		if err != nil {
+			panic(err)
+		}
+		return user.Name
+	}(), func() string {
+		name, err := os.Hostname()
+		if err != nil {
+			panic(err)
+		}
+		return name
+	}())
 	rootDeviceUUID = makeDeviceUuid()
 	flag.StringVar(&rootObjectPath, "path", ".", "browse root path")
 	flag.Parse()
@@ -409,21 +421,8 @@ func main() {
 		root{
 			SpecVersion: specVersion{Major: 1, Minor: 0},
 			Device: device{
-				DeviceType: rootDeviceType,
-				FriendlyName: fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
-					user, err := user.Current()
-					if err != nil {
-						panic(err)
-					}
-					return user.Name
-				}(),
-					func() string {
-						name, err := os.Hostname()
-						if err != nil {
-							panic(err)
-						}
-						return name
-					}()),
+				DeviceType:   rootDeviceType,
+				FriendlyName: friendlyName,
 				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
 				ModelName:    rootDeviceModelName,
 				UDN:          rootDeviceUUID,
@@ -435,10 +434,6 @@ func main() {
 		panic(err)
 	}
 	rootDescXML = append([]byte(`<?xml version="1.0"?>`), rootDescXML...)
-	log.Println(string(rootDescXML))
-	if err != nil {
-		panic(err)
-	}
 	httpConn, err = net.ListenTCP("tcp", &net.TCPAddr{Port: 1338})
 	if err != nil {
 		panic(err)
