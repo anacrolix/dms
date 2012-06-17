@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 )
 
@@ -42,7 +43,7 @@ func streamArgs(s map[string]string) (ret []string) {
 func Transcode(path, ss, t string) (r io.ReadCloser, err error) {
 	args := []string{
 		"ffmpeg",
-		"-threads", "4",
+		"-threads", strconv.FormatInt(int64(runtime.NumCPU()), 10),
 		"-async", "1",
 	}
 	if ss != "" {
