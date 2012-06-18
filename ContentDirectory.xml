@@ -133,7 +133,7 @@ A_ARG_TYPE_Count
 </argument>
 <argument>
 <name>UpdateID</name>
-<direction>out</direction
+<direction>out</direction>
 <relatedStateVariable>
 A_ARG_TYPE_UpdateID
 </relatedStateVariable>
