@@ -33,6 +33,7 @@ const (
 	resPath             = "/res"
 	rootDescPath        = "/rootDesc.xml"
 	maxAge              = "30"
+	ContentDirectorySCPDURL = "/scpd/ContentDirectory.xml"
 )
 
 func makeDeviceUuid() string {
@@ -76,7 +77,7 @@ var services = []service{
 	service{
 		ServiceType: "urn:schemas-upnp-org:service:ContentDirectory:1",
 		ServiceId:   "urn:upnp-org:serviceId:ContentDirectory",
-		SCPDURL:     "/scpd/ContentDirectory.xml",
+		SCPDURL:     ContentDirectorySCPDURL,
 		ControlURL:  "/ctl/ContentDirectory",
 	},
 	/*
@@ -289,10 +290,18 @@ func ReadContainer(path_, parentID, host string) (ret []interface{}) {
 	if err != nil {
 		panic(err)
 	}
+	fs := []<-chan interface{}{}
 	for _, fi := range fis {
 		for _, entry := range fileEntries(fi, path_) {
-			ret = append(ret, entryObject(parentID, host, entry))
+			ch := make(chan interface{})
+			fs = append(fs, ch)
+			go func(entry CDSEntry) {
+				ch<-entryObject(parentID, host, entry)
+			}(entry)
 		}
+	}
+	for _, res := range fs {
+		ret = append(ret, <-res)
 	}
 	return
 }
@@ -339,6 +348,10 @@ func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host strin
 			}
 		default:
 			log.Println("unhandled browse flag:", browse.BrowseFlag)
+		}
+	case "GetSearchCapabilities":
+		return map[string]string{
+			"SearchCaps": "",
 		}
 	default:
 		log.Println("unhandled content directory action:", sa.Action)
@@ -460,6 +473,10 @@ func main() {
 		w.Header().Set("content-length", fmt.Sprint(len(rootDescXML)))
 		w.Header().Set("server", serverField)
 		w.Write(rootDescXML)
+	})
+	http.HandleFunc(ContentDirectorySCPDURL, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
+		http.ServeFile(w, r, "ContentDirectory.xml")
 	})
 	http.HandleFunc("/ctl/ContentDirectory", func(w http.ResponseWriter, r *http.Request) {
 		soapActionString := r.Header.Get("SOAPACTION")
