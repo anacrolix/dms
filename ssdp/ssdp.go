@@ -12,7 +12,6 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -100,13 +99,7 @@ func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
 	if err != nil {
 		return
 	}
-	f, err := ret.File()
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	fd := int(f.Fd())
-	err = syscall.SetsockoptInt(fd, syscall.SOL_IP, syscall.IP_MULTICAST_TTL, 2)
+	err = setTTL(ret, 2)
 	return
 }
 
