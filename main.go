@@ -27,12 +27,12 @@ import (
 )
 
 const (
-	serverField         = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
-	rootDeviceType      = "urn:schemas-upnp-org:device:MediaServer:1"
-	rootDeviceModelName = "dms 1.0"
-	resPath             = "/res"
-	rootDescPath        = "/rootDesc.xml"
-	maxAge              = "30"
+	serverField             = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
+	rootDeviceType          = "urn:schemas-upnp-org:device:MediaServer:1"
+	rootDeviceModelName     = "dms 1.0"
+	resPath                 = "/res"
+	rootDescPath            = "/rootDesc.xml"
+	maxAge                  = "30"
 	ContentDirectorySCPDURL = "/scpd/ContentDirectory.xml"
 )
 
@@ -145,7 +145,11 @@ func doSSDP() {
 					UUID:      rootDeviceUUID,
 				}
 				active[if_.Name] = true
-				go s.Serve()
+				go func() {
+					if err := s.Serve(); err != nil {
+						log.Println(err)
+					}
+				}()
 			}
 		}
 		time.Sleep(time.Second)
@@ -296,7 +300,7 @@ func ReadContainer(path_, parentID, host string) (ret []interface{}) {
 			ch := make(chan interface{})
 			fs = append(fs, ch)
 			go func(entry CDSEntry) {
-				ch<-entryObject(parentID, host, entry)
+				ch <- entryObject(parentID, host, entry)
 			}(entry)
 		}
 	}
