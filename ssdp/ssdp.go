@@ -99,7 +99,9 @@ func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
 	if err != nil {
 		return
 	}
-	err = setTTL(ret, 2)
+	if err := setTTL(ret, 2); err != nil {
+		log.Println(err)
+	}
 	return
 }
 
@@ -127,7 +129,15 @@ func (me *Server) Serve() (err error) {
 			return err
 		}
 		for _, addr := range addrs {
-			ip := addr.(*net.IPNet).IP
+			ip := func() net.IP {
+				switch val := addr.(type) {
+				case *net.IPNet:
+					return val.IP
+				case *net.IPAddr:
+					return val.IP
+				}
+				panic(fmt.Sprint("unexpected addr type:", addr))
+			}()
 			me.notifyAll(ip, aliveNTS)
 		}
 		time.Sleep(60 * time.Second)
@@ -229,10 +239,18 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 			panic(err)
 		}
 		for _, addr := range addrs {
-			ipnet := addr.(*net.IPNet)
-			if ipnet.Contains(sender.IP) {
-				ret = append(ret, ipnet.IP)
-			}
+			ip := func() net.IP {
+				switch data := addr.(type) {
+				case *net.IPNet:
+					if data.Contains(sender.IP) {
+						return data.IP
+					}
+				case *net.IPAddr:
+					return data.IP
+				}
+				panic(addr)
+			}()
+			ret = append(ret, ip)
 		}
 		return
 	}() {
