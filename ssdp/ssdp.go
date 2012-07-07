@@ -239,18 +239,20 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 			panic(err)
 		}
 		for _, addr := range addrs {
-			ip := func() net.IP {
+			if ip, ok := func() (net.IP, bool) {
 				switch data := addr.(type) {
 				case *net.IPNet:
 					if data.Contains(sender.IP) {
-						return data.IP
+						return data.IP, true
 					}
+					return nil, false
 				case *net.IPAddr:
-					return data.IP
+					return data.IP, true
 				}
 				panic(addr)
-			}()
-			ret = append(ret, ip)
+			}(); ok {
+				ret = append(ret, ip)
+			}
 		}
 		return
 	}() {
