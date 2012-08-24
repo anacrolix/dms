@@ -41,14 +41,7 @@ type badStringError struct {
 
 func (e *badStringError) Error() string { return fmt.Sprintf("%s %q", e.what, e.str) }
 
-type Request struct {
-	Method     string
-	ProtoMajor int
-	ProtoMinor int
-	Header     http.Header
-}
-
-func ReadRequest(b *bufio.Reader) (req *Request, err error) {
+func ReadRequest(b *bufio.Reader) (req *http.Request, err error) {
 	tp := textproto.NewReader(b)
 	var s string
 	if s, err = tp.ReadLine(); err != nil {
@@ -68,7 +61,7 @@ func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 	if f[1] != "*" {
 		return nil, &badStringError{"bad URL request", f[1]}
 	}
-	req = &Request{
+	req = &http.Request{
 		Method: f[0],
 	}
 	var ok bool
@@ -257,19 +250,20 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		return
 	}() {
 		for _, type_ := range types {
-			resp := me.makeResponse(ip, type_)
+			resp := me.makeResponse(ip, type_, req)
 			delay := time.Duration(rand.Int63n(int64(time.Second) * int64(mx)))
 			go me.delayedSend(delay, resp, sender)
 		}
 	}
 }
 
-func (me *Server) makeResponse(ip net.IP, targ string) (ret []byte) {
+func (me *Server) makeResponse(ip net.IP, targ string, req *http.Request) (ret []byte) {
 	resp := &http.Response{
 		StatusCode: 200,
 		ProtoMajor: 1,
 		ProtoMinor: 1,
 		Header:     make(http.Header),
+		Request:	req,
 	}
 	for _, pair := range [...][2]string{
 		{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", (5*DefaultNotifyInterval)/2)},
