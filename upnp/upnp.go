@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"encoding/xml"
 )
 
 var serviceURNRegexp *regexp.Regexp
@@ -61,4 +62,38 @@ func ParseActionHTTPHeader(s string) (ret SoapAction, ok bool) {
 	ret.ServiceURN, ok = ParseServiceType(s[:hashIndex])
 	ok = true
 	return
+}
+
+type SpecVersion struct {
+	Major int `xml:"major"`
+	Minor int `xml:"minor"`
+}
+
+type icon struct {
+	Mimetype, Width, Height, Depth, URL string
+}
+
+type Service struct {
+	XMLName     xml.Name `xml:"service"`
+	ServiceType string   `xml:"serviceType"`
+	ServiceId   string   `xml:"serviceId"`
+	SCPDURL     string
+	ControlURL  string `xml:"controlURL"`
+	EventSubURL string `xml:"eventSubURL"`
+}
+
+type Device struct {
+	DeviceType   string `xml:"deviceType"`
+	FriendlyName string `xml:"friendlyName"`
+	Manufacturer string `xml:"manufacturer"`
+	ModelName    string `xml:"modelName"`
+	UDN          string
+	IconList     []icon
+	ServiceList  []Service `xml:"serviceList>service"`
+}
+
+type DeviceDesc struct {
+	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:device-1-0 root"`
+	SpecVersion SpecVersion `xml:"specVersion"`
+	Device      Device      `xml:"device"`
 }

@@ -45,36 +45,8 @@ func makeDeviceUuid() string {
 	return fmt.Sprintf("uuid:%x-%x-%x-%x-%x", buf[:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
 }
 
-type specVersion struct {
-	Major int `xml:"major"`
-	Minor int `xml:"minor"`
-}
-
-type icon struct {
-	Mimetype, Width, Height, Depth, URL string
-}
-
-type service struct {
-	XMLName     xml.Name `xml:"service"`
-	ServiceType string   `xml:"serviceType"`
-	ServiceId   string   `xml:"serviceId"`
-	SCPDURL     string
-	ControlURL  string `xml:"controlURL"`
-	EventSubURL string `xml:"eventSubURL"`
-}
-
-type device struct {
-	DeviceType   string `xml:"deviceType"`
-	FriendlyName string `xml:"friendlyName"`
-	Manufacturer string `xml:"manufacturer"`
-	ModelName    string `xml:"modelName"`
-	UDN          string
-	IconList     []icon
-	ServiceList  []service `xml:"serviceList>service"`
-}
-
-var services = []service{
-	service{
+var services = []upnp.Service{
+	upnp.Service{
 		ServiceType: "urn:schemas-upnp-org:service:ContentDirectory:1",
 		ServiceId:   "urn:upnp-org:serviceId:ContentDirectory",
 		SCPDURL:     ContentDirectorySCPDURL,
@@ -88,12 +60,6 @@ var services = []service{
 			ControlURL:  "/ctl/ConnectionManager",
 		},
 	*/
-}
-
-type root struct {
-	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:device-1-0 root"`
-	SpecVersion specVersion `xml:"specVersion"`
-	Device      device      `xml:"device"`
 }
 
 func devices() []string {
@@ -435,9 +401,9 @@ func main() {
 	}
 	var err error
 	rootDescXML, err = xml.MarshalIndent(
-		root{
-			SpecVersion: specVersion{Major: 1, Minor: 0},
-			Device: device{
+		upnp.DeviceDesc{
+			SpecVersion: upnp.SpecVersion{Major: 1, Minor: 0},
+			Device: upnp.Device{
 				DeviceType:   rootDeviceType,
 				FriendlyName: friendlyName,
 				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
