@@ -315,6 +315,7 @@ func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host strin
 				"TotalMatches":   fmt.Sprint(totalMatches),
 				"NumberReturned": fmt.Sprint(len(objs)),
 				"Result":         didl_lite(string(result)),
+				"UpdateID":       "0",
 			}
 		default:
 			log.Println("unhandled browse flag:", browse.BrowseFlag)
@@ -432,7 +433,13 @@ func main() {
 		}
 		path := r.Form.Get("path")
 		if r.Form.Get("transcode") == "" {
-			log.Printf("serving file %s: %s\n", r.Header.Get("Range"), path)
+			log.Printf("serving file%s: %s\n", func () (s string) {
+				s = r.Header.Get("Range")
+				if s != "" {
+					s = "(Range: " + s + ")"
+				}
+				return
+			}(), path)
 			http.ServeFile(w, r, path)
 			return
 		}
