@@ -97,3 +97,28 @@ type DeviceDesc struct {
 	SpecVersion SpecVersion `xml:"specVersion"`
 	Device      Device      `xml:"device"`
 }
+
+type Action struct {
+	Name string
+	Arguments []Argument
+}
+
+type Argument struct {
+	Name string
+	Direction string
+	RelatedStateVar string
+}
+
+type SCPD struct {
+	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:service-1-0 scpd"`
+	SpecVersion SpecVersion `xml:"specVersion"`
+	ActionList []Action `xml:"actionList>action"`
+	ServiceStateTable []StateVariable `xml:"serviceStateTable>stateVariable"`
+}
+
+type StateVariable struct {
+	SendEvents string `xml:"sendEvents,attr"`
+	Name string `xml:"name"`
+	DataType string `xml:"dataType"`
+	AllowedValues *[]string `xml:"allowedValueList>allowedValue,omitempty"`
+}
