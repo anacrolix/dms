@@ -98,6 +98,19 @@ type DeviceDesc struct {
 	Device      Device      `xml:"device"`
 }
 
+type Error struct {
+	XMLName xml.Name `xml:"urn:schemas-upnp-org:control-1-0 UPnPError"`
+	Code uint `xml:"errorCode"`
+	Desc string `xml:"errorDescription"`
+}
+
+var (
+	InvalidActionError Error = Error{
+		Code: 401,
+		Desc: "Invalid Action",
+	}
+)
+
 type Action struct {
 	Name string
 	Arguments []Argument

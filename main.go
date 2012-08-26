@@ -284,12 +284,12 @@ type Browse struct {
 	RequestedCount int
 }
 
-func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host string) map[string]string {
+func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host string) (map[string]string, *upnp.Error) {
 	switch sa.Action {
 	case "GetSortCapabilities":
 		return map[string]string{
 			"SortCaps": "dc:title",
-		}
+		}, nil
 	case "Browse":
 		var browse Browse
 		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
@@ -316,18 +316,17 @@ func contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host strin
 				"NumberReturned": fmt.Sprint(len(objs)),
 				"Result":         didl_lite(string(result)),
 				"UpdateID":       "0",
-			}
+			}, nil
 		default:
 			log.Println("unhandled browse flag:", browse.BrowseFlag)
 		}
 	case "GetSearchCapabilities":
 		return map[string]string{
 			"SearchCaps": "",
-		}
-	default:
-		log.Println("unhandled content directory action:", sa.Action)
+		}, nil
 	}
-	return nil
+	log.Println("unhandled content directory action:", sa.Action)
+	return nil, &upnp.InvalidActionError
 }
 
 func serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
@@ -470,8 +469,12 @@ func main() {
 		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 		w.Header().Set("Ext", "")
 		w.Header().Set("Server", serverField)
-		actionResponseXML, err := xml.MarshalIndent(func() soap.Action {
-			argMap := contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host)
+		actionResponseXML, err := xml.MarshalIndent(func() interface{} {
+			argMap, err := contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host)
+			if err != nil {
+				w.WriteHeader(500)
+				return soap.NewFault("UPnPError", err)
+			}
 			args := make([]soap.Arg, 0, len(argMap))
 			for argName, value := range argMap {
 				args = append(args, soap.Arg{
