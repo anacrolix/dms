@@ -3,6 +3,7 @@ package main
 import (
 	"bitbucket.org/anacrolix/dms/dlna"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
+	"bitbucket.org/anacrolix/dms/futures"
 	"bitbucket.org/anacrolix/dms/misc"
 	"bitbucket.org/anacrolix/dms/soap"
 	"bitbucket.org/anacrolix/dms/ssdp"
@@ -21,6 +22,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -111,11 +113,11 @@ func doSSDP() {
 					UUID:      rootDeviceUUID,
 				}
 				active[if_.Name] = true
-				go func() {
+				go func(if_ net.Interface) {
 					if err := s.Serve(); err != nil {
-						log.Println(err)
+						log.Printf("error serving SSDP on %s: %s\n", if_.Name, err)
 					}
-				}()
+				}(if_)
 			}
 		}
 		time.Sleep(time.Second)
@@ -150,7 +152,9 @@ func childCount(path_ string) int {
 }
 
 func itemResExtra(path string) (bitrate uint, duration string) {
+	t := time.Now()
 	info, err := ffmpeg.Probe(path)
+	log.Println("probe took", time.Now().Sub(t))
 	if err != nil {
 		log.Printf("error probing %s: %s", path, err)
 		return
@@ -249,6 +253,20 @@ type CDSEntry struct {
 	Transcode  bool
 }
 
+type FileInfoSlice []os.FileInfo
+
+func (me FileInfoSlice) Len() int {
+	return len(me)
+}
+
+func (me FileInfoSlice) Less(i, j int) bool {
+	return strings.ToLower(me[i].Name()) < strings.ToLower(me[j].Name())
+}
+
+func (me FileInfoSlice) Swap(i, j int) {
+	me[i], me[j] = me[j], me[i]
+}
+
 func ReadContainer(path_, parentID, host string) (ret []interface{}) {
 	dir, err := os.Open(path_)
 	if err != nil {
@@ -256,22 +274,29 @@ func ReadContainer(path_, parentID, host string) (ret []interface{}) {
 		return
 	}
 	defer dir.Close()
-	fis, err := dir.Readdir(-1)
+	var fis FileInfoSlice
+	fis, err = dir.Readdir(-1)
 	if err != nil {
 		panic(err)
 	}
-	fs := []<-chan interface{}{}
-	for _, fi := range fis {
-		for _, entry := range fileEntries(fi, path_) {
-			ch := make(chan interface{})
-			fs = append(fs, ch)
-			go func(entry CDSEntry) {
-				ch <- entryObject(parentID, host, entry)
-			}(entry)
-		}
-	}
-	for _, res := range fs {
-		ret = append(ret, <-res)
+	sort.Sort(fis)
+	pool := futures.NewExecutor(10)
+	defer pool.Shutdown()
+	for obj := range pool.Map(func(entry futures.I) futures.R {
+		return entryObject(parentID, host, entry.(CDSEntry))
+	}, func() <-chan futures.I {
+		ret := make(chan futures.I)
+		go func() {
+			for _, fi := range fis {
+				for _, entry := range fileEntries(fi, path_) {
+					ret <- entry
+				}
+			}
+			close(ret)
+		}()
+		return ret
+	}()) {
+		ret = append(ret, obj)
 	}
 	return
 }
@@ -432,7 +457,7 @@ func main() {
 		}
 		path := r.Form.Get("path")
 		if r.Form.Get("transcode") == "" {
-			log.Printf("serving file%s: %s\n", func () (s string) {
+			log.Printf("serving file%s: %s\n", func() (s string) {
 				s = r.Header.Get("Range")
 				if s != "" {
 					s = "(Range: " + s + ")"

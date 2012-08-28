@@ -1,12 +1,15 @@
 package ffmpeg
 
 import (
+	"bitbucket.org/anacrolix/dms/cache"
+	"os"
 	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 type Info struct {
@@ -53,7 +56,7 @@ func readLine(r *bufio.Reader) (line string, err error) {
 	return
 }
 
-func Probe(path string) (info *Info, err error) {
+func probeUncached(path string) (info *Info, err error) {
 	cmd := exec.Command("ffprobe", "-show_format", "-show_streams", path)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -103,4 +106,22 @@ func Probe(path string) (info *Info, err error) {
 		}
 	}
 	return info, nil
+}
+
+type probeStamp time.Time
+
+var probeCache *cache.Cache = cache.New()
+
+func Probe(path string) (info *Info, err error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	stamp := fi.ModTime()
+	data, err := probeCache.Get(path, stamp, func() (cache.Data, cache.Stamp, error) {
+		info, err := probeUncached(path)
+		return info, stamp, err
+	})
+	info = data.(*Info)
+	return
 }
