@@ -36,10 +36,13 @@ func (me *Cache) Get(key Key, stamp Stamp, genfn GenFunc) (data Data, err error)
 		}
 		me.store[key] = val
 	}
-	val.Lock()
 	me.Unlock()
+	val.Lock()
 	if val.stamp != stamp {
 		val.data, val.stamp, err = genfn()
+		if err != nil {
+			val.stamp = nil
+		}
 	}
 	data = val.data
 	val.Unlock()
