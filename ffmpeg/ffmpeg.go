@@ -77,6 +77,7 @@ func probeUncached(path string) (info *Info, err error) {
 	for {
 		line, err := readLine(r)
 		if err == io.EOF {
+			err = nil
 			break
 		}
 		if err != nil {
