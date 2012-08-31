@@ -135,7 +135,7 @@ func (me *Server) Serve() (err error) {
 		}
 		time.Sleep(60 * time.Second)
 	}
-	panic(nil)
+	panic("unreachable")
 }
 
 func (me *Server) usnFromTarget(target string) string {
