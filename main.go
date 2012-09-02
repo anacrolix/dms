@@ -114,8 +114,14 @@ func doSSDP() {
 		}
 		active++
 		go func(if_ net.Interface) {
-			if err := s.Serve(); err != nil {
+			if err := s.Init(); err != nil {
 				log.Println(if_.Name, err)
+			} else {
+				log.Println("started SSDP on", if_.Name)
+				if err := s.Serve(); err != nil {
+					log.Println(if_.Name, err)
+				}
+				s.Close()
 			}
 			stopped <- struct{}{}
 		}(if_)
@@ -449,7 +455,7 @@ func main() {
 	rootDescXML = append([]byte(`<?xml version="1.0"?>`), rootDescXML...)
 	httpConn, err = net.ListenTCP("tcp", &net.TCPAddr{Port: 1338})
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 	defer httpConn.Close()
 	log.Println("HTTP server on", httpConn.Addr())

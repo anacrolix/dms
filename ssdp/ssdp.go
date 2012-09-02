@@ -55,7 +55,7 @@ func ReadRequest(b *bufio.Reader) (req *http.Request, err error) {
 
 	var f []string
 	// TODO a split that only allows N values?
-	if f = strings.Split(s, " "); len(f) != 3 {
+	if f = strings.SplitN(s, " ", 3); len(f) < 3 {
 		return nil, &badStringError{"malformed request line", s}
 	}
 	if f[1] != "*" {
@@ -109,12 +109,16 @@ func (me *Server) serve() {
 	}
 }
 
-func (me *Server) Serve() (err error) {
+func (me *Server) Init() (err error) {
 	me.conn, err = makeConn(me.Interface)
-	if err != nil {
-		return
-	}
-	defer me.conn.Close()
+	return
+}
+
+func (me *Server) Close() {
+	me.conn.Close()
+}
+
+func (me *Server) Serve() (err error) {
 	go me.serve()
 	for {
 		addrs, err := me.Interface.Addrs()
