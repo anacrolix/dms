@@ -65,7 +65,7 @@ func ReadRequest(b *bufio.Reader) (req *http.Request, err error) {
 		Method: f[0],
 	}
 	var ok bool
-	if req.ProtoMajor, req.ProtoMinor, ok = http.ParseHTTPVersion(f[2]); !ok {
+	if req.ProtoMajor, req.ProtoMinor, ok = http.ParseHTTPVersion(strings.TrimSpace(f[2])); !ok {
 		return nil, &badStringError{"malformed HTTP version", f[2]}
 	}
 
