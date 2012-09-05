@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"bitbucket.org/anacrolix/dms/dlna"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
 	"bitbucket.org/anacrolix/dms/futures"
@@ -10,6 +9,7 @@ import (
 	"bitbucket.org/anacrolix/dms/ssdp"
 	"bitbucket.org/anacrolix/dms/upnp"
 	"bitbucket.org/anacrolix/dms/upnpav"
+	"bytes"
 	"crypto/md5"
 	"encoding/xml"
 	"flag"
@@ -36,7 +36,6 @@ const (
 	rootDeviceModelName     = "dms 1.0"
 	resPath                 = "/res"
 	rootDescPath            = "/rootDesc.xml"
-	maxAge                  = "30"
 	ContentDirectorySCPDURL = "/scpd/ContentDirectory.xml"
 )
 
@@ -90,10 +89,8 @@ func serveHTTP() {
 			http.DefaultServeMux.ServeHTTP(w, r)
 		}),
 	}
-	if err := srv.Serve(httpConn); err != nil {
-		panic(err)
-	}
-	panic(nil)
+	err := srv.Serve(httpConn)
+	log.Fatalln(err)
 }
 
 func doSSDP() {
@@ -105,12 +102,13 @@ func doSSDP() {
 	}
 	for _, if_ := range ifs {
 		s := ssdp.Server{
-			Interface: if_,
-			Devices:   devices(),
-			Services:  serviceTypes(),
-			Location:  location,
-			Server:    serverField,
-			UUID:      rootDeviceUUID,
+			Interface:      if_,
+			Devices:        devices(),
+			Services:       serviceTypes(),
+			Location:       location,
+			Server:         serverField,
+			UUID:           rootDeviceUUID,
+			NotifyInterval: 30,
 		}
 		active++
 		go func(if_ net.Interface) {
@@ -126,7 +124,7 @@ func doSSDP() {
 			stopped <- struct{}{}
 		}(if_)
 	}
-	for active != 0 {
+	for active > 0 {
 		<-stopped
 		active--
 	}
@@ -134,7 +132,7 @@ func doSSDP() {
 }
 
 var (
-	startTime time.Time
+	startTime      time.Time
 	rootDeviceUUID string
 	httpConn       *net.TCPListener
 	rootDescXML    []byte

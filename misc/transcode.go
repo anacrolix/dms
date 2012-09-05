@@ -21,11 +21,11 @@ func streamArgs(s map[string]string) (ret []string) {
 	switch s["codec_type"] {
 	case "video":
 		/*
-		if s["codec_name"] == "h264" {
-			if i, _ := strconv.ParseInt(s["is_avc"], 0, 0); i != 0 {
-				return []string{"-vcodec", "copy", "-sameq", "-vbsf", "h264_mp4toannexb"}
+			if s["codec_name"] == "h264" {
+				if i, _ := strconv.ParseInt(s["is_avc"], 0, 0); i != 0 {
+					return []string{"-vcodec", "copy", "-sameq", "-vbsf", "h264_mp4toannexb"}
+				}
 			}
-		}
 		*/
 		return []string{"-target", "pal-dvd"}
 	case "audio":

@@ -10,7 +10,7 @@ type Queue struct {
 
 func New() *Queue {
 	ret := &Queue{
-		in: make(chan interface{}),
+		in:  make(chan interface{}),
 		out: make(chan interface{}),
 	}
 	go func() {
@@ -27,7 +27,7 @@ func New() *Queue {
 				l.PushBack(v)
 			} else {
 				select {
-				case ret.out<-l.Front().Value:
+				case ret.out <- l.Front().Value:
 					l.Remove(l.Front())
 				case v, ok := <-ret.in:
 					if !ok {
@@ -44,7 +44,7 @@ func New() *Queue {
 }
 
 func (me *Queue) Put(v interface{}) {
-	me.in<-v
+	me.in <- v
 }
 
 func (me *Queue) Get() (val interface{}, ok bool) {

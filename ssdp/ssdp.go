@@ -16,10 +16,9 @@ import (
 )
 
 const (
-	AddrString            = "239.255.255.250:1900"
-	rootDevice            = "upnp:rootdevice"
-	DefaultNotifyInterval = 30
-	aliveNTS              = "ssdp:alive"
+	AddrString = "239.255.255.250:1900"
+	rootDevice = "upnp:rootdevice"
+	aliveNTS   = "ssdp:alive"
 )
 
 var (
@@ -78,13 +77,14 @@ func ReadRequest(b *bufio.Reader) (req *http.Request, err error) {
 }
 
 type Server struct {
-	conn      *net.UDPConn
-	Interface net.Interface
-	Server    string
-	Services  []string
-	Devices   []string
-	Location  func(net.IP) string
-	UUID      string
+	conn           *net.UDPConn
+	Interface      net.Interface
+	Server         string
+	Services       []string
+	Devices        []string
+	Location       func(net.IP) string
+	UUID           string
+	NotifyInterval uint
 }
 
 func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
@@ -137,7 +137,7 @@ func (me *Server) Serve() (err error) {
 			}()
 			me.notifyAll(ip, aliveNTS)
 		}
-		time.Sleep(60 * time.Second)
+		time.Sleep(time.Duration(me.NotifyInterval) * time.Second)
 	}
 	panic("unreachable")
 }
@@ -152,7 +152,7 @@ func (me *Server) usnFromTarget(target string) string {
 func (me *Server) makeNotifyMessage(location, target, nts string) []byte {
 	lines := [...][2]string{
 		{"HOST", AddrString},
-		{"CACHE-CONTROL", "max-age=120"},
+		{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2)},
 		{"LOCATION", location},
 		{"NT", target},
 		{"NTS", nts},
@@ -267,10 +267,10 @@ func (me *Server) makeResponse(ip net.IP, targ string, req *http.Request) (ret [
 		ProtoMajor: 1,
 		ProtoMinor: 1,
 		Header:     make(http.Header),
-		Request:	req,
+		Request:    req,
 	}
 	for _, pair := range [...][2]string{
-		{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", (5*DefaultNotifyInterval)/2)},
+		{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2)},
 		{"EXT", ""},
 		{"LOCATION", me.Location(ip)},
 		{"SERVER", me.Server},
