@@ -2,11 +2,12 @@ package ffmpeg
 
 import (
 	"bitbucket.org/anacrolix/dms/cache"
-	"os"
 	"bufio"
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -56,8 +57,17 @@ func readLine(r *bufio.Reader) (line string, err error) {
 	return
 }
 
+var ffprobePath string
+
+func init() {
+	var err error
+	if ffprobePath, err = exec.LookPath("ffprobe"); err != nil {
+		log.Println(err)
+	}
+}
+
 func probeUncached(path string) (info *Info, err error) {
-	cmd := exec.Command("ffprobe", "-show_format", "-show_streams", path)
+	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", path)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
