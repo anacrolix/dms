@@ -1,8 +1,8 @@
 package futures
 
 import (
-	"sync"
 	"bitbucket.org/anacrolix/dms/queue"
+	"sync"
 )
 
 type Executor struct {
@@ -33,19 +33,19 @@ func (me *Executor) Shutdown() {
 
 func (me *Executor) Submit(fn func() R) *Future {
 	fut := &Future{
-		fn: fn,
+		fn:   fn,
 		done: make(chan struct{}),
-		do: &sync.Once{},
+		do:   &sync.Once{},
 	}
 	me.waiting.Put(fut)
 	return fut
 }
 
 type Future struct {
-	fn func() R
-	done chan struct{}
+	fn     func() R
+	done   chan struct{}
 	result R
-	do *sync.Once
+	do     *sync.Once
 }
 
 func (me *Future) Result() R {
@@ -73,7 +73,7 @@ func (me *Executor) Map(fn func(I) R, inputs <-chan I) <-chan R {
 				if !ok {
 					break
 				}
-				ret<-_fut.(*Future).Result()
+				ret <- _fut.(*Future).Result()
 			}
 			close(ret)
 		}()

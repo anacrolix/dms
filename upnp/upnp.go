@@ -1,11 +1,11 @@
 package upnp
 
 import (
+	"encoding/xml"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
-	"encoding/xml"
 )
 
 var serviceURNRegexp *regexp.Regexp
@@ -100,8 +100,8 @@ type DeviceDesc struct {
 
 type Error struct {
 	XMLName xml.Name `xml:"urn:schemas-upnp-org:control-1-0 UPnPError"`
-	Code uint `xml:"errorCode"`
-	Desc string `xml:"errorDescription"`
+	Code    uint     `xml:"errorCode"`
+	Desc    string   `xml:"errorDescription"`
 }
 
 var (
@@ -112,26 +112,26 @@ var (
 )
 
 type Action struct {
-	Name string
+	Name      string
 	Arguments []Argument
 }
 
 type Argument struct {
-	Name string
-	Direction string
+	Name            string
+	Direction       string
 	RelatedStateVar string
 }
 
 type SCPD struct {
-	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:service-1-0 scpd"`
-	SpecVersion SpecVersion `xml:"specVersion"`
-	ActionList []Action `xml:"actionList>action"`
+	XMLName           xml.Name        `xml:"urn:schemas-upnp-org:service-1-0 scpd"`
+	SpecVersion       SpecVersion     `xml:"specVersion"`
+	ActionList        []Action        `xml:"actionList>action"`
 	ServiceStateTable []StateVariable `xml:"serviceStateTable>stateVariable"`
 }
 
 type StateVariable struct {
-	SendEvents string `xml:"sendEvents,attr"`
-	Name string `xml:"name"`
-	DataType string `xml:"dataType"`
+	SendEvents    string    `xml:"sendEvents,attr"`
+	Name          string    `xml:"name"`
+	DataType      string    `xml:"dataType"`
 	AllowedValues *[]string `xml:"allowedValueList>allowedValue,omitempty"`
 }

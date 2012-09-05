@@ -20,10 +20,10 @@ func main() {
 		},
 		ServiceStateTable: []upnp.StateVariable{
 			{SendEvents: "no", Name: "A_ARG_TYPE_ObjectID", DataType: "string",
-			AllowedValues: &[]string{"hi", "there"},},
+				AllowedValues: &[]string{"hi", "there"}},
 			{
 				SendEvents: "yes",
-				Name: "loltype",
+				Name:       "loltype",
 			},
 		},
 	}

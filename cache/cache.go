@@ -11,7 +11,7 @@ type Stamp interface{}
 
 type cacheValue struct {
 	stamp interface{}
-	data Data
+	data  Data
 	*sync.Mutex
 }
 
@@ -22,7 +22,7 @@ type Cache struct {
 
 func New() *Cache {
 	return &Cache{
-		store: map[interface{}]*cacheValue{},
+		store:      map[interface{}]*cacheValue{},
 		sync.Mutex: &sync.Mutex{},
 	}
 }
@@ -48,4 +48,3 @@ func (me *Cache) Get(key Key, stamp Stamp, genfn GenFunc) (data Data, err error)
 	val.Unlock()
 	return
 }
-
