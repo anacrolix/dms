@@ -36,7 +36,9 @@ const (
 	rootDeviceModelName     = "dms 1.0"
 	resPath                 = "/res"
 	rootDescPath            = "/rootDesc.xml"
-	ContentDirectorySCPDURL = "/scpd/ContentDirectory.xml"
+	contentDirectorySCPDURL = "/scpd/ContentDirectory.xml"
+	contentDirectoryEventSubURL = "/evt/ContentDirectory"
+	contentDirectoryControlURL = "/ctl/ContentDirectory"
 )
 
 func makeDeviceUuid() string {
@@ -52,8 +54,9 @@ var services = []upnp.Service{
 	upnp.Service{
 		ServiceType: "urn:schemas-upnp-org:service:ContentDirectory:1",
 		ServiceId:   "urn:upnp-org:serviceId:ContentDirectory",
-		SCPDURL:     ContentDirectorySCPDURL,
-		ControlURL:  "/ctl/ContentDirectory",
+		SCPDURL:     contentDirectorySCPDURL,
+		ControlURL:  contentDirectoryControlURL,
+		EventSubURL: contentDirectoryEventSubURL,
 	},
 	/*
 		service{
@@ -160,11 +163,12 @@ func childCount(path_ string) int {
 }
 
 func itemResExtra(path string) (bitrate uint, duration string) {
-	t := time.Now()
 	info, err := ffmpeg.Probe(path)
-	log.Println("probe took", time.Now().Sub(t))
 	if err != nil {
 		log.Printf("error probing %s: %s", path, err)
+		return
+	}
+	if info == nil {
 		return
 	}
 	fmt.Sscan(info.Format["bit_rate"], &bitrate)
@@ -457,8 +461,12 @@ func main() {
 	}
 	defer httpConn.Close()
 	log.Println("HTTP server on", httpConn.Addr())
-	http.HandleFunc("/", func(http.ResponseWriter, *http.Request) {
-		panic(nil)
+	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
+		log.Println("unhandled HTTP request for:", req.URL)
+		http.NotFound(resp, req)
+	})
+	http.HandleFunc(contentDirectoryEventSubURL, func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "vlc sux", http.StatusNotImplemented)
 	})
 	http.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -484,18 +492,17 @@ func main() {
 		w.Header().Set("server", serverField)
 		w.Write(rootDescXML)
 	})
-	http.HandleFunc(ContentDirectorySCPDURL, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(contentDirectorySCPDURL, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
 		http.ServeContent(w, r, ".xml", startTime, bytes.NewReader([]byte(ContentDirectoryServiceDescription)))
 	})
-	http.HandleFunc("/ctl/ContentDirectory", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(contentDirectoryControlURL, func(w http.ResponseWriter, r *http.Request) {
 		soapActionString := r.Header.Get("SOAPACTION")
 		soapAction, ok := upnp.ParseActionHTTPHeader(soapActionString)
 		if !ok {
 			log.Println("invalid soapaction:", soapActionString)
 			return
 		}
-		log.Printf("SOAP request from %s: %s\n", r.RemoteAddr, soapAction)
 		var env soap.Envelope
 		if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
 			panic(err)

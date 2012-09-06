@@ -67,6 +67,9 @@ func init() {
 }
 
 func probeUncached(path string) (info *Info, err error) {
+	if ffprobePath == "" {
+		return nil, nil
+	}
 	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", path)
 	out, err := cmd.StdoutPipe()
 	if err != nil {

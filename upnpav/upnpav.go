@@ -9,8 +9,8 @@ type Resource struct {
 	ProtocolInfo string   `xml:"protocolInfo,attr"`
 	URL          string   `xml:",chardata"`
 	Size         uint64   `xml:"size,attr"`
-	Bitrate      uint     `xml:"bitrate,attr"`
-	Duration     string   `xml:"duration,attr"`
+	Bitrate      uint     `xml:"bitrate,attr,omitempty"`
+	Duration     string   `xml:"duration,attr,omitempty"`
 }
 
 type Container struct {
