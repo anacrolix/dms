@@ -31,14 +31,14 @@ import (
 )
 
 const (
-	serverField             = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
-	rootDeviceType          = "urn:schemas-upnp-org:device:MediaServer:1"
-	rootDeviceModelName     = "dms 1.0"
-	resPath                 = "/res"
-	rootDescPath            = "/rootDesc.xml"
-	contentDirectorySCPDURL = "/scpd/ContentDirectory.xml"
+	serverField                 = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
+	rootDeviceType              = "urn:schemas-upnp-org:device:MediaServer:1"
+	rootDeviceModelName         = "dms 1.0"
+	resPath                     = "/res"
+	rootDescPath                = "/rootDesc.xml"
+	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
-	contentDirectoryControlURL = "/ctl/ContentDirectory"
+	contentDirectoryControlURL  = "/ctl/ContentDirectory"
 )
 
 func makeDeviceUuid() string {
@@ -162,21 +162,40 @@ func childCount(path_ string) int {
 	return ret
 }
 
-func itemResExtra(path string) (bitrate uint, duration string) {
-	info, err := ffmpeg.Probe(path)
-	if err != nil {
-		log.Printf("error probing %s: %s", path, err)
-		return
+// update the UPnP object fields from ffprobe data
+// priority is given the format section, and then the streams sequentially
+func itemExtra(item *upnpav.Object, info *ffmpeg.Info) {
+	setFromTags := func(m map[string]string) {
+		for key, val := range m {
+			setIfUnset := func(s *string) {
+				if *s == "" {
+					*s = val
+				}
+			}
+			switch strings.ToLower(key) {
+			case "tag:artist":
+				setIfUnset(&item.Artist)
+			case "tag:album":
+				setIfUnset(&item.Album)
+			case "tag:genre":
+				setIfUnset(&item.Genre)
+			}
+		}
 	}
-	if info == nil {
-		return
+	setFromTags(info.Format)
+	for _, m := range info.Streams {
+		setFromTags(m)
 	}
+}
+
+// returns res attributes for the raw stream
+func itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string) {
 	fmt.Sscan(info.Format["bit_rate"], &bitrate)
 	if d := info.Format["duration"]; d != "N/A" {
 		var f float64
-		_, err = fmt.Sscan(info.Format["duration"], &f)
+		_, err := fmt.Sscan(info.Format["duration"], &f)
 		if err != nil {
-			log.Printf("probed duration for %s: %s\n", path, err)
+			log.Println(err)
 		} else {
 			duration = misc.FormatDurationSexagesimal(time.Duration(f * float64(time.Second)))
 		}
@@ -229,7 +248,14 @@ func entryObject(parentID, host string, entry CDSEntry) interface{} {
 		URL:          url_.String(),
 		Size:         uint64(entry.FileInfo.Size()),
 	}
-	mainRes.Bitrate, mainRes.Duration = itemResExtra(path_)
+	ffInfo, err := ffmpeg.Probe(path_)
+	if err != nil {
+		log.Printf("error probing %s: %s", path_, err)
+	}
+	if ffInfo != nil {
+		itemExtra(&obj, ffInfo)
+		mainRes.Bitrate, mainRes.Duration = itemResExtra(ffInfo)
+	}
 	return upnpav.Item{
 		Object: obj,
 		Res:    []upnpav.Resource{mainRes},
@@ -474,13 +500,6 @@ func main() {
 		}
 		path := r.Form.Get("path")
 		if r.Form.Get("transcode") == "" {
-			log.Printf("serving file%s: %s\n", func() (s string) {
-				s = r.Header.Get("Range")
-				if s != "" {
-					s = "(Range: " + s + ")"
-				}
-				return
-			}(), path)
 			http.ServeFile(w, r, path)
 			return
 		}

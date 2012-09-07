@@ -32,4 +32,7 @@ type Object struct {
 	Class      string `xml:"upnp:class"`
 	Icon       string `xml:"upnp:icon,omitempty"`
 	Title      string `xml:"dc:title"`
+	Artist     string `xml:"upnp:artist,omitempty"`
+	Album      string `xml:"upnp:album,omitempty"`
+	Genre      string `xml:"upnp:genre,omitempty"`
 }
