@@ -456,7 +456,16 @@ func main() {
 		return name
 	}())
 	rootDeviceUUID = makeDeviceUuid()
-	flag.StringVar(&rootObjectPath, "path", ".", "browse root path")
+	flag.StringVar(&rootObjectPath, "path", func() (pwd string) {
+		pwd, err := os.Getwd()
+		if err != nil {
+			log.Println(err)
+		}
+		if pwd == "" {
+			pwd = "."
+		}
+		return
+	}(), "browse root path")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", "unexpected positional arguments", flag.Args())
@@ -488,8 +497,17 @@ func main() {
 	defer httpConn.Close()
 	log.Println("HTTP server on", httpConn.Addr())
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		log.Println("unhandled HTTP request for:", req.URL)
-		http.NotFound(resp, req)
+		resp.Header().Set("content-type", "text/html")
+		err := rootTmpl.Execute(resp, struct {
+			Readonly bool
+			Path     string
+		}{
+			true,
+			rootObjectPath,
+		})
+		if err != nil {
+			log.Println(err)
+		}
 	})
 	http.HandleFunc(contentDirectoryEventSubURL, func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "vlc sux", http.StatusNotImplemented)
