@@ -320,10 +320,10 @@ func ReadContainer(path_, parentID, host string) (ret []interface{}) {
 	sort.Sort(fis)
 	pool := futures.NewExecutor(runtime.NumCPU())
 	defer pool.Shutdown()
-	for obj := range pool.Map(func(entry futures.I) futures.R {
+	for obj := range pool.Map(func(entry interface{}) interface{} {
 		return entryObject(parentID, host, entry.(CDSEntry))
-	}, func() <-chan futures.I {
-		ret := make(chan futures.I)
+	}, func() <-chan interface{} {
+		ret := make(chan interface{})
 		go func() {
 			for _, fi := range fis {
 				for _, entry := range fileEntries(fi, path_) {

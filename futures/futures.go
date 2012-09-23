@@ -5,10 +5,12 @@ import (
 	"sync"
 )
 
+// Maintains the pool of workers and receives new work.
 type Executor struct {
 	waiting *queue.Queue
 }
 
+// Create a new Executor that does up to maxWorkers tasks in parallel.
 func NewExecutor(maxWorkers int) *Executor {
 	ret := &Executor{
 		waiting: queue.New(),
@@ -27,11 +29,13 @@ func NewExecutor(maxWorkers int) *Executor {
 	return ret
 }
 
+// Prevents new tasks being submitted, and cleans up workers when all futures have been processed.
 func (me *Executor) Shutdown() {
 	me.waiting.Close()
 }
 
-func (me *Executor) Submit(fn func() R) *Future {
+// Submit the function to the Executor, returning a Future that represents it.
+func (me *Executor) Submit(fn func() interface{}) *Future {
 	fut := &Future{
 		fn:   fn,
 		done: make(chan struct{}),
@@ -41,14 +45,16 @@ func (me *Executor) Submit(fn func() R) *Future {
 	return fut
 }
 
+// Represents some asynchronous execution.
 type Future struct {
-	fn     func() R
+	fn     func() interface{}
 	done   chan struct{}
-	result R
+	result interface{}
 	do     *sync.Once
 }
 
-func (me *Future) Result() R {
+// Blocks until the Future completes, and returns the computed value.
+func (me *Future) Result() interface{} {
 	<-me.done
 	return me.result
 }
@@ -60,11 +66,9 @@ func (me *Future) run() {
 	})
 }
 
-type R interface{} // the return type
-type I interface{} // the input type
-
-func (me *Executor) Map(fn func(I) R, inputs <-chan I) <-chan R {
-	ret := make(chan R)
+// Calls fn with each item received from inputs, and outputs the results in the same order to the returned channel.
+func (me *Executor) Map(fn func(interface{}) interface{}, inputs <-chan interface{}) <-chan interface{} {
+	ret := make(chan interface{})
 	go func() {
 		futs := queue.New()
 		go func() {
@@ -78,8 +82,8 @@ func (me *Executor) Map(fn func(I) R, inputs <-chan I) <-chan R {
 			close(ret)
 		}()
 		for a := range inputs {
-			fut := me.Submit(func(a I) func() R {
-				return func() R {
+			fut := me.Submit(func(a interface{}) func() interface{} {
+				return func() interface{} {
 					return fn(a)
 				}
 			}(a))
