@@ -3,6 +3,7 @@ package ssdp
 import (
 	"bufio"
 	"bytes"
+	"code.google.com/p/go.net/ipv4"
 	"fmt"
 	"io"
 	"log"
@@ -92,7 +93,8 @@ func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
 	if err != nil {
 		return
 	}
-	if err := setTTL(ret, 2); err != nil {
+	p := ipv4.NewPacketConn(ret)
+	if err := p.SetMulticastTTL(2); err != nil {
 		log.Println(err)
 	}
 	return
