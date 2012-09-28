@@ -15,8 +15,8 @@ func main() {
 	size := uint64(137)
 	data, err := xml.Marshal(Meh{
 		Size: &xml.Attr{
-			xml.Name{Local: "size"},
-			fmt.Sprint(size),
+			Name:  xml.Name{Local: "size"},
+			Value: fmt.Sprint(size),
 		},
 	})
 	fmt.Println(string(data), err)

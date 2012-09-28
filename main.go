@@ -120,7 +120,7 @@ func doSSDP() {
 			} else {
 				log.Println("started SSDP on", if_.Name)
 				if err := s.Serve(); err != nil {
-					log.Println(if_.Name, err)
+					log.Printf("%q: %q\n", if_.Name, err)
 				}
 				s.Close()
 			}
@@ -556,16 +556,16 @@ func main() {
 			args := make([]soap.Arg, 0, len(argMap))
 			for argName, value := range argMap {
 				args = append(args, soap.Arg{
-					xml.Name{Local: argName},
-					value,
+					XMLName: xml.Name{Local: argName},
+					Value:   value,
 				})
 			}
 			return soap.Action{
-				xml.Name{
+				XMLName: xml.Name{
 					Space: soapAction.ServiceURN.String(),
 					Local: soapAction.Action + "Response",
 				},
-				args,
+				Args: args,
 			}
 		}(), "", "  ")
 		if err != nil {
