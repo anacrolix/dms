@@ -191,7 +191,7 @@ func itemExtra(item *upnpav.Object, info *ffmpeg.Info) {
 // returns res attributes for the raw stream
 func itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string) {
 	fmt.Sscan(info.Format["bit_rate"], &bitrate)
-	if d := info.Format["duration"]; d != "N/A" {
+	if d := info.Format["duration"]; d != "" && d != "N/A" {
 		var f float64
 		_, err := fmt.Sscan(info.Format["duration"], &f)
 		if err != nil {

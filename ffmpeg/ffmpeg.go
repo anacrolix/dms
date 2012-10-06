@@ -29,6 +29,9 @@ func readSection(r *bufio.Reader, end string) (map[string]string, error) {
 			break
 		}
 		ss := strings.SplitN(line, "=", 2)
+		if len(ss) != 2 {
+			return nil, fmt.Errorf("bad line: %s", line)
+		}
 		opt := ss[0]
 		val := ss[1]
 		if _, ok := ret[opt]; ok {
