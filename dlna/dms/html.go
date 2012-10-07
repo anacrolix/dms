@@ -1,4 +1,4 @@
-package main
+package dms
 
 import (
 	"html/template"

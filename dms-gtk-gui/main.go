@@ -1,77 +1,17 @@
 package main
 
 import (
+	"bitbucket.org/anacrolix/dms/dlna/dms"
 	"github.com/anacrolix/go-gtk/gtk"
 	"github.com/mattn/go-gtk/gdk"
 	"io"
 	"log"
 	"os"
-	"os/exec"
+	"runtime"
 )
-
-var (
-	child    *exec.Cmd
-	lastPath string
-	logView  *gtk.GtkTextView
-)
-
-func appendToLog(text string) {
-	var endIter gtk.GtkTextIter
-	gdk.ThreadsEnter()
-	logBuffer := logView.GetBuffer()
-	logBuffer.GetEndIter(&endIter)
-	logBuffer.Insert(&endIter, text)
-	// logBuffer.GetEndIter(&endIter)
-	logView.ScrollToIter(&endIter, 0, false, 0, 0)
-	// gdk.Flush()
-	gdk.ThreadsLeave()
-}
-
-func killChild() {
-	if child != nil {
-		child.Process.Kill()
-	}
-}
-
-func restartChild(path string) {
-	killChild()
-	if path == "" {
-		return
-	}
-	child = exec.Command("dms", "-path", path)
-	r, w, err := os.Pipe()
-	if err != nil {
-		panic(err)
-	}
-	child.Stdout = w
-	child.Stderr = w
-	go func() {
-		defer r.Close()
-		var buf [4096]byte
-		for {
-			n, err := r.Read(buf[:])
-			appendToLog(string(buf[:n]))
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				panic(err)
-			}
-		}
-	}()
-	lastPath = path
-	if err := child.Start(); err != nil {
-		panic(err)
-	}
-	w.Close()
-	go func() {
-		if err := child.Wait(); err != nil {
-			appendToLog("server terminated: " + err.Error() + "\n")
-		}
-	}()
-}
 
 func main() {
+	runtime.LockOSThread()
 	gtk.Init(&os.Args)
 	gdk.ThreadsInit()
 
@@ -95,15 +35,7 @@ func main() {
 	button := gtk.FileChooserButtonWithDialog(dialog)
 	hbox.Add(button)
 
-	changed := func() {
-		path := button.GetFilename()
-		log.Println("path changed to:", path)
-		if path != lastPath {
-			restartChild(path)
-		}
-	}
-
-	logView = gtk.TextView()
+	logView := gtk.TextView()
 	logView.SetEditable(false)
 	logView.ModifyFontEasy("monospace")
 	logView.SetWrapMode(gtk.GTK_WRAP_WORD_CHAR)
@@ -112,12 +44,52 @@ func main() {
 	logViewScroller.SetPolicy(gtk.GTK_POLICY_AUTOMATIC, gtk.GTK_POLICY_ALWAYS)
 	vbox.PackEnd(logViewScroller, true, true, 0)
 
+	getPath := func() string {
+		return button.GetFilename()
+	}
+
+	appendToLog := func(text string) {
+		var endIter gtk.GtkTextIter
+		gdk.ThreadsEnter()
+		logBuffer := logView.GetBuffer()
+		logBuffer.GetEndIter(&endIter)
+		logBuffer.Insert(&endIter, text)
+		logView.ScrollToIter(&endIter, 0, false, 0, 0)
+		gdk.ThreadsLeave()
+	}
+
 	window.ShowAll()
 	if dialog.Run() != gtk.GTK_RESPONSE_ACCEPT {
 		return
 	}
-	defer killChild()
-	changed()
-	button.Connect("selection-changed", changed)
+	go func() {
+		logReader, logWriter := io.Pipe()
+		go func() {
+			var buf [128]byte
+			for {
+				n, err := logReader.Read(buf[:])
+				appendToLog(string(buf[:n]))
+				if err != nil {
+					panic(err)
+				}
+			}
+		}()
+		dmsLogger := log.New(logWriter, "", 0)
+		log.SetOutput(logWriter)
+		dmsServer, err := dms.New(getPath(), dmsLogger)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		defer dmsServer.Close()
+		runtime.LockOSThread()
+		gdk.ThreadsEnter()
+		button.Connect("selection-changed", func() {
+			dmsServer.SetRootPath(getPath())
+		})
+		gdk.ThreadsLeave()
+		runtime.UnlockOSThread()
+		dmsServer.Serve()
+	}()
 	gtk.Main()
+	runtime.UnlockOSThread()
 }
