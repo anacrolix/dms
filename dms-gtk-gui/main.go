@@ -25,12 +25,12 @@ func main() {
 	hbox := gtk.HBox(false, 0)
 	vbox.PackStart(hbox, false, true, 0)
 
-	hbox.PackStart(gtk.Label("Share directory: "), false, true, 0)
+	hbox.PackStart(gtk.Label("Shared directory: "), false, true, 0)
 
 	dialog := gtk.FileChooserDialog(
-		"Media directory", window, gtk.GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+		"Select directory to share", window, gtk.GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
 		gtk.GTK_STOCK_CANCEL, gtk.GTK_RESPONSE_CANCEL,
-		gtk.GTK_STOCK_OPEN, gtk.GTK_RESPONSE_ACCEPT)
+		gtk.GTK_STOCK_OK, gtk.GTK_RESPONSE_ACCEPT)
 
 	button := gtk.FileChooserButtonWithDialog(dialog)
 	hbox.Add(button)
