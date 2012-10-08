@@ -30,13 +30,10 @@ func readSection(r *bufio.Reader, end string) (map[string]string, error) {
 		}
 		ss := strings.SplitN(line, "=", 2)
 		if len(ss) != 2 {
-			return nil, fmt.Errorf("bad line: %s", line)
+			continue
 		}
 		opt := ss[0]
 		val := ss[1]
-		if _, ok := ret[opt]; ok {
-			return nil, errors.New(fmt.Sprint("duplicate option:", opt))
-		}
 		ret[opt] = val
 	}
 	return ret, nil
