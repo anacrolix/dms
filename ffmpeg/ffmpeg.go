@@ -74,6 +74,7 @@ func probeUncached(path string) (info *Info, err error) {
 		return nil, nil
 	}
 	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", path)
+	setHideWindow(cmd)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
