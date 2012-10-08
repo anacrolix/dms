@@ -255,6 +255,7 @@ func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{}
 		Size:         uint64(entry.FileInfo.Size()),
 	}
 	ffInfo, err := ffmpeg.Probe(path_)
+	err = suppressFFmpegProbeDataErrors(err)
 	if err != nil {
 		me.logger.Printf("error probing %s: %s", path_, err)
 	}
