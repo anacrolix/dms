@@ -38,6 +38,7 @@ const (
 	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	contentDirectoryControlURL  = "/ctl/ContentDirectory"
+	directoryMimeType           = ""
 )
 
 func makeDeviceUuid(unique string) string {
@@ -209,6 +210,22 @@ func (me *server) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string
 	return
 }
 
+func MimeTypeByPath(path_ string) (ret string) {
+	ret = mime.TypeByExtension(path.Ext(path_))
+	if ret != "" {
+		return
+	}
+	file, _ := os.Open(path_)
+	if file == nil {
+		return
+	}
+	var data [512]byte
+	n, _ := file.Read(data[:])
+	ret = http.DetectContentType(data[:n])
+	file.Close()
+	return
+}
+
 func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{} {
 	path_ := path.Join(entry.ParentPath, entry.FileInfo.Name())
 	obj := upnpav.Object{
@@ -224,13 +241,7 @@ func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{}
 			ChildCount: me.childCount(path_),
 		}
 	}
-	mimeType := func() string {
-		if entry.Transcode {
-			return "video/mpeg"
-		}
-		return mime.TypeByExtension(path.Ext(entry.FileInfo.Name()))
-	}()
-	obj.Class = "object.item." + strings.SplitN(mimeType, "/", 2)[0] + "Item"
+	obj.Class = "object.item." + strings.SplitN(entry.MimeType, "/", 2)[0] + "Item"
 	values := url.Values{}
 	values.Set("path", path_)
 	if entry.Transcode {
@@ -250,7 +261,7 @@ func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{}
 		cf.SupportRange = true
 	}
 	mainRes := upnpav.Resource{
-		ProtocolInfo: "http-get:*:" + mimeType + ":" + cf.String(),
+		ProtocolInfo: "http-get:*:" + entry.MimeType + ":" + cf.String(),
 		URL:          url_.String(),
 		Size:         uint64(entry.FileInfo.Size()),
 	}
@@ -272,20 +283,21 @@ func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{}
 func fileEntries(fileInfo os.FileInfo, parentPath string) []CDSEntry {
 	if fileInfo.IsDir() {
 		return []CDSEntry{
-			{fileInfo.Name(), fileInfo, parentPath, false},
+			{fileInfo.Name(), fileInfo, parentPath, false, directoryMimeType},
 		}
 	}
-	mimeType := mime.TypeByExtension(path.Ext(fileInfo.Name()))
+	mimeType := MimeTypeByPath(path.Join(parentPath, fileInfo.Name()))
 	mimeTypeType := strings.SplitN(mimeType, "/", 2)[0]
 	ret := []CDSEntry{
-		{fileInfo.Name(), fileInfo, parentPath, false},
+		{fileInfo.Name(), fileInfo, parentPath, false, mimeType},
 	}
 	if mimeTypeType == "video" {
 		ret = append(ret, CDSEntry{
-			fileInfo.Name() + "/transcode",
-			fileInfo,
-			parentPath,
-			true,
+			Title:      fileInfo.Name() + "/transcode",
+			FileInfo:   fileInfo,
+			ParentPath: parentPath,
+			Transcode:  true,
+			MimeType:   "video/mpeg",
 		})
 	}
 	return ret
@@ -296,6 +308,7 @@ type CDSEntry struct {
 	FileInfo   os.FileInfo
 	ParentPath string
 	Transcode  bool
+	MimeType   string
 }
 
 type FileInfoSlice []os.FileInfo
