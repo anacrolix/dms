@@ -1,11 +1,14 @@
 package main
 
 import (
+	"../dlna/dms"
+	"flag"
 	"fmt"
-	"mime"
-	"strings"
 )
 
 func main() {
-	fmt.Println(strings.SplitN(mime.TypeByExtension(".avi"), "/", 2)[0])
+	flag.Parse()
+	for _, arg := range flag.Args() {
+		fmt.Println(dms.MimeTypeByPath(arg))
+	}
 }
