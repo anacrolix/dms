@@ -4,6 +4,10 @@ import (
 	"encoding/xml"
 )
 
+const (
+	NoSuchObjectErrorCode = 701
+)
+
 type Resource struct {
 	XMLName      xml.Name `xml:"res"`
 	ProtocolInfo string   `xml:"protocolInfo,attr"`

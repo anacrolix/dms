@@ -104,10 +104,19 @@ type Error struct {
 	Desc    string   `xml:"errorDescription"`
 }
 
+const (
+	InvalidActionErrorCode        = 401
+	ArgumentValueInvalidErrorCode = 600
+)
+
 var (
 	InvalidActionError Error = Error{
 		Code: 401,
 		Desc: "Invalid Action",
+	}
+	ArgumentValueInvalidError = Error{
+		Code: 600,
+		Desc: "The argument value is invalid",
 	}
 )
 
