@@ -66,8 +66,6 @@ func init() {
 	}
 }
 
-func setHideWindow(cmd *exec.Cmd) {}
-
 func probeUncached(path string) (info *Info, err error) {
 	if ffprobePath == "" {
 		return nil, nil

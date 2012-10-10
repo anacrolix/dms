@@ -280,10 +280,6 @@ func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{}
 	}
 }
 
-func suppressFFmpegProbeDataErrors(err error) error {
-	return err
-}
-
 func fileEntries(fileInfo os.FileInfo, parentPath string) []CDSEntry {
 	if fileInfo.IsDir() {
 		return []CDSEntry{
