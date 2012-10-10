@@ -58,14 +58,6 @@ var services = []upnp.Service{
 		ControlURL:  contentDirectoryControlURL,
 		EventSubURL: contentDirectoryEventSubURL,
 	},
-	/*
-		service{
-			ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
-			ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-			SCPDURL:     "/scpd/ConnectionManager.xml",
-			ControlURL:  "/ctl/ConnectionManager",
-		},
-	*/
 }
 
 func devices() []string {
@@ -229,7 +221,12 @@ func MimeTypeByPath(path_ string) (ret string) {
 func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{} {
 	path_ := path.Join(entry.ParentPath, entry.FileInfo.Name())
 	obj := upnpav.Object{
-		ID:         path_,
+		ID: path_ + func() string {
+			if entry.Transcode {
+				return "\x00"
+			}
+			return ""
+		}(),
 		Title:      entry.Title,
 		Restricted: 1,
 		ParentID:   parentID,
@@ -382,6 +379,9 @@ func (me *server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		if path == "0" {
 			path = me.rootObjectPath
 		}
+		if path[len(path)-1] == 0 {
+			path = path[:len(path)-1]
+		}
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
 			objs := me.ReadContainer(path, browse.ObjectID, host)
@@ -398,7 +398,7 @@ func (me *server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 				"TotalMatches":   fmt.Sprint(totalMatches),
 				"NumberReturned": fmt.Sprint(len(objs)),
 				"Result":         didl_lite(string(result)),
-				"UpdateID":       "0",
+				// "UpdateID":       "0",
 			}, nil
 		default:
 			me.logger.Println("unhandled browse flag:", browse.BrowseFlag)

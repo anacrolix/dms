@@ -105,11 +105,13 @@ const ContentDirectoryServiceDescription = `<?xml version="1.0"?>
           <direction>out</direction>
           <relatedStateVariable>A_ARG_TYPE_Count</relatedStateVariable>
         </argument>
+        <!--
         <argument>
           <name>UpdateID</name>
           <direction>out</direction>
           <relatedStateVariable>A_ARG_TYPE_UpdateID</relatedStateVariable>
         </argument>
+        -->
       </argumentList>
     </action>
     <action>
