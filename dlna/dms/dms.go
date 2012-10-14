@@ -11,6 +11,8 @@ import (
 	"bitbucket.org/anacrolix/dms/upnpav"
 	"bytes"
 	"crypto/md5"
+	"encoding/ascii85"
+	"encoding/gob"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -39,6 +41,7 @@ const (
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	contentDirectoryControlURL  = "/ctl/ContentDirectory"
 	directoryMimeType           = ""
+	transcodeMimeType           = "video/mpeg"
 )
 
 func makeDeviceUuid(unique string) string {
@@ -218,21 +221,19 @@ func MimeTypeByPath(path_ string) (ret string) {
 	return
 }
 
-func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{} {
+func (me *server) entryObject(entry CDSEntry, host string) interface{} {
 	path_ := path.Join(entry.ParentPath, entry.FileInfo.Name())
 	obj := upnpav.Object{
-		ID: path_ + func() string {
-			if entry.Transcode {
-				return "\x00"
-			}
-			return ""
-		}(),
-		Title:      entry.Title,
+		ID: objectID{
+			Path:      path_,
+			Transcode: entry.Transcode,
+		}.Encode(me.rootObjectPath),
 		Restricted: 1,
-		ParentID:   parentID,
+		ParentID:   objectID{Path: entry.ParentPath}.Encode(me.rootObjectPath),
 	}
 	if entry.FileInfo.IsDir() {
 		obj.Class = "object.container.storageFolder"
+		obj.Title = entry.FileInfo.Name()
 		return upnpav.Container{
 			Object:     obj,
 			ChildCount: me.childCount(path_),
@@ -271,6 +272,12 @@ func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{}
 		itemExtra(&obj, ffInfo)
 		mainRes.Bitrate, mainRes.Duration = me.itemResExtra(ffInfo)
 	}
+	if obj.Title == "" {
+		obj.Title = entry.FileInfo.Name()
+	}
+	if entry.Transcode {
+		obj.Title += "/transcode"
+	}
 	return upnpav.Item{
 		Object: obj,
 		Res:    []upnpav.Resource{mainRes},
@@ -280,17 +287,16 @@ func (me *server) entryObject(parentID, host string, entry CDSEntry) interface{}
 func fileEntries(fileInfo os.FileInfo, parentPath string) []CDSEntry {
 	if fileInfo.IsDir() {
 		return []CDSEntry{
-			{fileInfo.Name(), fileInfo, parentPath, false, directoryMimeType},
+			{fileInfo, parentPath, false, directoryMimeType},
 		}
 	}
 	mimeType := MimeTypeByPath(path.Join(parentPath, fileInfo.Name()))
 	mimeTypeType := strings.SplitN(mimeType, "/", 2)[0]
 	ret := []CDSEntry{
-		{fileInfo.Name(), fileInfo, parentPath, false, mimeType},
+		{fileInfo, parentPath, false, mimeType},
 	}
 	if mimeTypeType == "video" {
 		ret = append(ret, CDSEntry{
-			Title:      fileInfo.Name() + "/transcode",
 			FileInfo:   fileInfo,
 			ParentPath: parentPath,
 			Transcode:  true,
@@ -300,12 +306,12 @@ func fileEntries(fileInfo os.FileInfo, parentPath string) []CDSEntry {
 	return ret
 }
 
+// Sufficient information to determine how many entries to each actual file
 type CDSEntry struct {
-	Title      string
-	FileInfo   os.FileInfo
-	ParentPath string
-	Transcode  bool
-	MimeType   string
+	FileInfo   os.FileInfo // file type. names would do but it's cheaper to do this upfront.
+	ParentPath string      // allows us to reconstruct the path
+	Transcode  bool        // if this is the transcoded entry
+	MimeType   string      // was used in deciding whether to transcode
 }
 
 type FileInfoSlice []os.FileInfo
@@ -338,7 +344,7 @@ func (me *server) ReadContainer(path_, parentID, host string) (ret []interface{}
 	pool := futures.NewExecutor(runtime.NumCPU())
 	defer pool.Shutdown()
 	for obj := range pool.Map(func(entry interface{}) interface{} {
-		return me.entryObject(parentID, host, entry.(CDSEntry))
+		return me.entryObject(entry.(CDSEntry), host)
 	}, func() <-chan interface{} {
 		ret := make(chan interface{})
 		go func() {
@@ -364,6 +370,52 @@ type Browse struct {
 	RequestedCount int
 }
 
+type objectID struct {
+	Path      string
+	Transcode bool
+}
+
+func (me objectID) Encode(rootPath string) string {
+	switch me.Path {
+	case rootPath:
+		return "0"
+	case path.Dir(rootPath):
+		return "-1"
+	}
+	w := &bytes.Buffer{}
+	enc := gob.NewEncoder(w)
+	if err := enc.Encode(me); err != nil {
+		panic(err)
+	}
+	dst := make([]byte, ascii85.MaxEncodedLen(w.Len()))
+	n := ascii85.Encode(dst, w.Bytes())
+	return "1" + string(dst[:n])
+}
+
+func (me *server) parseObjectID(id string) (ret objectID) {
+	if id == "0" {
+		ret.Path = me.rootObjectPath
+		return
+	}
+	if id[0] != '1' {
+		panic(id)
+	}
+	id = id[1:]
+	dst := make([]byte, len(id))
+	ndst, nsrc, err := ascii85.Decode(dst, []byte(id), true)
+	if err != nil {
+		panic(err)
+	}
+	if nsrc != len(id) {
+		panic(nsrc)
+	}
+	dec := gob.NewDecoder(bytes.NewReader(dst[:ndst]))
+	if err := dec.Decode(&ret); err != nil {
+		panic(err)
+	}
+	return
+}
+
 func (me *server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host string) (map[string]string, *upnp.Error) {
 	switch sa.Action {
 	case "GetSortCapabilities":
@@ -375,16 +427,10 @@ func (me *server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
 			panic(err)
 		}
-		path := browse.ObjectID
-		if path == "0" {
-			path = me.rootObjectPath
-		}
-		if path[len(path)-1] == 0 {
-			path = path[:len(path)-1]
-		}
+		objectID := me.parseObjectID(browse.ObjectID)
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
-			objs := me.ReadContainer(path, browse.ObjectID, host)
+			objs := me.ReadContainer(objectID.Path, browse.ObjectID, host)
 			totalMatches := len(objs)
 			objs = objs[browse.StartingIndex:]
 			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
@@ -400,8 +446,40 @@ func (me *server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 				"Result":         didl_lite(string(result)),
 				// "UpdateID":       "0",
 			}, nil
+		case "BrowseMetadata":
+			fileInfo, err := os.Stat(objectID.Path)
+			if err != nil {
+				return nil, &upnp.Error{
+					Code: upnpav.NoSuchObjectErrorCode,
+					Desc: err.Error(),
+				}
+			}
+			return map[string]string{
+				"TotalMatches":   "1",
+				"NumberReturned": "1",
+				"Result": didl_lite(func() string {
+					buf, err := xml.MarshalIndent(me.entryObject(CDSEntry{
+						ParentPath: path.Dir(objectID.Path),
+						FileInfo:   fileInfo,
+						Transcode:  objectID.Transcode,
+						MimeType: func() string {
+							if objectID.Transcode {
+								return transcodeMimeType
+							}
+							return MimeTypeByPath(objectID.Path)
+						}(),
+					}, host), "", "  ")
+					if err != nil {
+						panic(err) // because aliens
+					}
+					return string(buf)
+				}()),
+			}, nil
 		default:
-			me.logger.Println("unhandled browse flag:", browse.BrowseFlag)
+			return nil, &upnp.Error{
+				Code: upnp.ArgumentValueInvalidErrorCode,
+				Desc: fmt.Sprint("unhandled browse flag:", browse.BrowseFlag),
+			}
 		}
 	case "GetSearchCapabilities":
 		return map[string]string{
