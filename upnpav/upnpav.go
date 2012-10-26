@@ -12,9 +12,10 @@ type Resource struct {
 	XMLName      xml.Name `xml:"res"`
 	ProtocolInfo string   `xml:"protocolInfo,attr"`
 	URL          string   `xml:",chardata"`
-	Size         uint64   `xml:"size,attr"`
+	Size         uint64   `xml:"size,attr,omitempty"`
 	Bitrate      uint     `xml:"bitrate,attr,omitempty"`
 	Duration     string   `xml:"duration,attr,omitempty"`
+	Resolution   string   `xml:"resolution,attr,omitempty"`
 }
 
 type Container struct {

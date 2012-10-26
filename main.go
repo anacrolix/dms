@@ -29,7 +29,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	server, err := dms.New(path, log.New(os.Stderr, "", 0))
+	server, err := dms.New(path)
 	if server != nil {
 		defer server.Close()
 	}

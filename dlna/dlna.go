@@ -13,7 +13,7 @@ const (
 )
 
 type ContentFeatures struct {
-	//ProfileName string
+	ProfileName     string
 	SupportTimeSeek bool
 	SupportRange    bool
 	//play speeds, DLNA.ORG_PS
@@ -23,9 +23,9 @@ type ContentFeatures struct {
 // flags are in hex. trailing 24 zeroes, 26 are after the space
 // "DLNA.ORG_OP=" time-seek-range-supp bytes-range-header-supp
 
-func (cf ContentFeatures) String() string {
+func (cf ContentFeatures) String() (ret string) {
 	//DLNA.ORG_PN=[a-zA-Z0-9_]*
-	return fmt.Sprintf("DLNA.ORG_OP=%02b;DLNA.ORG_CI=%b", func() (ret uint) {
+	ret = fmt.Sprintf("DLNA.ORG_OP=%02b;DLNA.ORG_CI=%b", func() (ret uint) {
 		if cf.SupportTimeSeek {
 			ret |= 2
 		}
@@ -39,6 +39,10 @@ func (cf ContentFeatures) String() string {
 		}
 		return 0
 	}())
+	if cf.ProfileName != "" {
+		ret += ";DLNA_PN=" + cf.ProfileName
+	}
+	return
 }
 
 func ParseNPTTime(s string) (time.Duration, error) {

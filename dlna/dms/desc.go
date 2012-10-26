@@ -1,6 +1,6 @@
 package dms
 
-const ContentDirectoryServiceDescription = `<?xml version="1.0"?>
+const contentDirectoryServiceDescription = `<?xml version="1.0"?>
 <scpd xmlns="urn:schemas-upnp-org:service-1-0">
   <specVersion>
     <major>1</major>
@@ -105,13 +105,11 @@ const ContentDirectoryServiceDescription = `<?xml version="1.0"?>
           <direction>out</direction>
           <relatedStateVariable>A_ARG_TYPE_Count</relatedStateVariable>
         </argument>
-        <!--
         <argument>
           <name>UpdateID</name>
           <direction>out</direction>
           <relatedStateVariable>A_ARG_TYPE_UpdateID</relatedStateVariable>
         </argument>
-        -->
       </argumentList>
     </action>
     <action>
