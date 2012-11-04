@@ -173,15 +173,21 @@ func (me *Server) makeNotifyMessage(location, target, nts string) []byte {
 	return buf.Bytes()
 }
 
-func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr) {
+func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr) error {
 	time.Sleep(delay)
 	n, err := me.conn.WriteToUDP(buf, addr)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	if n != len(buf) {
-		panic(err)
+		return fmt.Errorf("short write: %d/%d bytes", n, len(buf))
 	}
+	return nil
+}
+
+func (me *Server) log(args ...interface{}) {
+	args = append([]interface{}{me.Interface.Name + ":"}, args...)
+	log.Print(args...)
 }
 
 func (me *Server) notifyAll(ip net.IP, nts string) {
@@ -189,7 +195,12 @@ func (me *Server) notifyAll(ip net.IP, nts string) {
 	for _, type_ := range me.allTypes() {
 		buf := me.makeNotifyMessage(loc, type_, nts)
 		delay := time.Duration(rand.Int63n(int64(100 * time.Millisecond)))
-		go me.delayedSend(delay, buf, NetAddr)
+		go func() {
+			err := me.delayedSend(delay, buf, NetAddr)
+			if err != nil {
+				me.log(err)
+			}
+		}()
 	}
 }
 
@@ -261,7 +272,11 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		for _, type_ := range types {
 			resp := me.makeResponse(ip, type_, req)
 			delay := time.Duration(rand.Int63n(int64(time.Second) * int64(mx)))
-			go me.delayedSend(delay, resp, sender)
+			go func() {
+				if err := me.delayedSend(delay, resp, sender); err != nil {
+					me.log(err)
+				}
+			}()
 		}
 	}
 }
