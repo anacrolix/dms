@@ -90,14 +90,18 @@ func (me *Server) serveHTTP() {
 	log.Fatalln(err)
 }
 
-func (me *Server) doSSDP() {
+func (me *Server) doSSDP(netInterface string) {
 	active := 0
 	stopped := make(chan struct{})
 	ifs, err := net.Interfaces()
 	if err != nil {
 		log.Fatalln("error enumerating interfaces:", err)
 	}
+
 	for _, if_ := range ifs {
+		if netInterface != "all" && if_.Name != netInterface {
+			continue
+		}
 		s := ssdp.Server{
 			Interface: if_,
 			Devices:   devices(),
@@ -552,21 +556,12 @@ func (me *Server) ChangeRootPath(path string) {
 }
 
 // Create a new DMS complete with SSDP sharing files under `path`.
-func New(path string) (*Server, error) {
+func New(path string, httpPort int, fName string) (*Server, error) {
+	if fName == "" {
+		fName = getDefaultFreindlyName()
+	}
 	server := &Server{
-		friendlyName: fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
-			user, err := user.Current()
-			if err != nil {
-				panic(err)
-			}
-			return user.Name
-		}(), func() string {
-			name, err := os.Hostname()
-			if err != nil {
-				panic(err)
-			}
-			return name
-		}()),
+		friendlyName:   fName,
 		rootObjectPath: path,
 		httpServeMux:   http.NewServeMux(),
 	}
@@ -589,13 +584,29 @@ func New(path string) (*Server, error) {
 		panic(err)
 	}
 	server.rootDescXML = append([]byte(`<?xml version="1.0"?>`), server.rootDescXML...)
-	server.httpConn, err = net.ListenTCP("tcp", &net.TCPAddr{Port: 1338})
+	server.httpConn, err = net.ListenTCP("tcp", &net.TCPAddr{Port: httpPort})
 	if err != nil {
 		return nil, err
 	}
 	log.Println("HTTP server on", server.httpConn.Addr())
 	server.initMux(server.httpServeMux)
 	return server, nil
+}
+
+func getDefaultFreindlyName() string {
+	return fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
+		user, err := user.Current()
+		if err != nil {
+			panic(err)
+		}
+		return user.Name
+	}(), func() string {
+		name, err := os.Hostname()
+		if err != nil {
+			panic(err)
+		}
+		return name
+	}())
 }
 
 func (server *Server) initMux(mux *http.ServeMux) {
@@ -685,9 +696,9 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 }
 
-func (me *Server) Serve() {
+func (me *Server) Serve(netInterface string) {
 	go me.serveHTTP()
-	me.doSSDP()
+	me.doSSDP(netInterface)
 }
 
 // Stops the server
