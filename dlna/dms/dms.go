@@ -558,7 +558,7 @@ func (me *Server) ChangeRootPath(path string) {
 // Create a new DMS complete with SSDP sharing files under `path`.
 func New(path string, httpPort int, fName string) (*Server, error) {
 	if fName == "" {
-		fName = getDefaultFreindlyName()
+		fName = getDefaultFriendlyName()
 	}
 	server := &Server{
 		friendlyName:   fName,
@@ -593,7 +593,7 @@ func New(path string, httpPort int, fName string) (*Server, error) {
 	return server, nil
 }
 
-func getDefaultFreindlyName() string {
+func getDefaultFriendlyName() string {
 	return fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
 		user, err := user.Current()
 		if err != nil {
