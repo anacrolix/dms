@@ -209,7 +209,8 @@ func (me *Server) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string
 
 // Used to determine the MIME-type for the given path
 func MimeTypeByPath(path_ string) (ret string) {
-	ret = mime.TypeByExtension(path.Ext(path_))
+	ext := strings.ToLower(path.Ext(path_))
+	ret = mime.TypeByExtension(ext)
 	if ret != "" {
 		return
 	}
@@ -217,10 +218,10 @@ func MimeTypeByPath(path_ string) (ret string) {
 	if file == nil {
 		return
 	}
+	defer file.Close()
 	var data [512]byte
 	n, _ := file.Read(data[:])
 	ret = http.DetectContentType(data[:n])
-	file.Close()
 	return
 }
 
