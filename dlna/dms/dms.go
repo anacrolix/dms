@@ -75,7 +75,7 @@ func serviceTypes() (ret []string) {
 	return
 }
 func (me *Server) httpPort() int {
-	return me.httpConn.Addr().(*net.TCPAddr).Port
+	return me.HTTPConn.Addr().(*net.TCPAddr).Port
 }
 
 func (me *Server) serveHTTP() {
@@ -86,18 +86,14 @@ func (me *Server) serveHTTP() {
 			me.httpServeMux.ServeHTTP(w, r)
 		}),
 	}
-	err := srv.Serve(me.httpConn)
+	err := srv.Serve(me.HTTPConn)
 	log.Fatalln(err)
 }
 
 func (me *Server) doSSDP() {
 	active := 0
 	stopped := make(chan struct{})
-	ifs, err := net.Interfaces()
-	if err != nil {
-		log.Fatalln("error enumerating interfaces:", err)
-	}
-	for _, if_ := range ifs {
+	for _, if_ := range me.Interfaces {
 		s := ssdp.Server{
 			Interface: if_,
 			Devices:   devices(),
@@ -135,10 +131,11 @@ var (
 )
 
 type Server struct {
-	httpConn       *net.TCPListener
+	HTTPConn       net.Listener
+	FriendlyName   string
+	Interfaces     []net.Interface
 	httpServeMux   *http.ServeMux
-	rootObjectPath string
-	friendlyName   string
+	RootObjectPath string
 	rootDescXML    []byte
 	rootDeviceUUID string
 }
@@ -205,7 +202,8 @@ func (me *Server) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string
 
 // Used to determine the MIME-type for the given path
 func MimeTypeByPath(path_ string) (ret string) {
-	ret = mime.TypeByExtension(path.Ext(path_))
+	ext := strings.ToLower(path.Ext(path_))
+	ret = mime.TypeByExtension(ext)
 	if ret != "" {
 		return
 	}
@@ -215,8 +213,8 @@ func MimeTypeByPath(path_ string) (ret string) {
 	}
 	var data [512]byte
 	n, _ := file.Read(data[:])
-	ret = http.DetectContentType(data[:n])
 	file.Close()
+	ret = http.DetectContentType(data[:n])
 	return
 }
 
@@ -224,7 +222,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
 		ID: objectID{
 			Path: entry.Path,
-		}.Encode(me.rootObjectPath),
+		}.Encode(me.RootObjectPath),
 		Restricted: 1,
 		ParentID:   entry.ParentID,
 	}
@@ -313,7 +311,7 @@ func (server *Server) fileEntries(fileInfo os.FileInfo, parentPath string) []cds
 		Path:     path.Join(parentPath, fileInfo.Name()),
 		ParentID: objectID{
 			Path: parentPath,
-		}.Encode(server.rootObjectPath),
+		}.Encode(server.RootObjectPath),
 	}}
 }
 
@@ -404,7 +402,7 @@ func (me objectID) Encode(rootPath string) string {
 
 func (me *Server) parseObjectID(id string) (ret objectID) {
 	if id == "0" {
-		ret.Path = me.rootObjectPath
+		ret.Path = me.RootObjectPath
 		return
 	}
 	if id[0] != '1' {
@@ -548,54 +546,23 @@ func init() {
 
 // Changes the root path shared by the server
 func (me *Server) ChangeRootPath(path string) {
-	me.rootObjectPath = path
+	me.RootObjectPath = path
 }
 
-// Create a new DMS complete with SSDP sharing files under `path`.
-func New(path string) (*Server, error) {
-	server := &Server{
-		friendlyName: fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
-			user, err := user.Current()
-			if err != nil {
-				panic(err)
-			}
-			return user.Name
-		}(), func() string {
-			name, err := os.Hostname()
-			if err != nil {
-				panic(err)
-			}
-			return name
-		}()),
-		rootObjectPath: path,
-		httpServeMux:   http.NewServeMux(),
-	}
-	server.rootDeviceUUID = makeDeviceUuid(server.friendlyName)
-	var err error
-	server.rootDescXML, err = xml.MarshalIndent(
-		upnp.DeviceDesc{
-			SpecVersion: upnp.SpecVersion{Major: 1, Minor: 0},
-			Device: upnp.Device{
-				DeviceType:   rootDeviceType,
-				FriendlyName: server.friendlyName,
-				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
-				ModelName:    rootDeviceModelName,
-				UDN:          server.rootDeviceUUID,
-				ServiceList:  services,
-			},
-		},
-		" ", "  ")
-	if err != nil {
-		panic(err)
-	}
-	server.rootDescXML = append([]byte(`<?xml version="1.0"?>`), server.rootDescXML...)
-	server.httpConn, err = net.ListenTCP("tcp", &net.TCPAddr{Port: 1338})
-	if err != nil {
-		return nil, err
-	}
-	log.Println("HTTP server on", server.httpConn.Addr())
-	server.initMux(server.httpServeMux)
-	return server, nil
+func getDefaultFriendlyName() string {
+	return fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
+		user, err := user.Current()
+		if err != nil {
+			panic(err)
+		}
+		return user.Name
+	}(), func() string {
+		name, err := os.Hostname()
+		if err != nil {
+			panic(err)
+		}
+		return name
+	}())
 }
 
 func (server *Server) initMux(mux *http.ServeMux) {
@@ -606,7 +573,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			Path     string
 		}{
 			true,
-			server.rootObjectPath,
+			server.RootObjectPath,
 		})
 		if err != nil {
 			log.Println(err)
@@ -685,14 +652,42 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 }
 
-func (me *Server) Serve() {
-	go me.serveHTTP()
-	me.doSSDP()
+func (srv *Server) Serve() (err error) {
+	if srv.FriendlyName == "" {
+		srv.FriendlyName = getDefaultFriendlyName()
+	}
+	srv.httpServeMux = http.NewServeMux()
+	srv.rootDeviceUUID = makeDeviceUuid(srv.FriendlyName)
+	srv.rootDescXML, err = xml.MarshalIndent(
+		upnp.DeviceDesc{
+			SpecVersion: upnp.SpecVersion{Major: 1, Minor: 0},
+			Device: upnp.Device{
+				DeviceType:   rootDeviceType,
+				FriendlyName: srv.FriendlyName,
+				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
+				ModelName:    rootDeviceModelName,
+				UDN:          srv.rootDeviceUUID,
+				ServiceList:  services,
+			},
+		},
+		" ", "  ")
+	if err != nil {
+		return
+	}
+	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
+	if err != nil {
+		return
+	}
+	log.Println("HTTP srv on", srv.HTTPConn.Addr())
+	srv.initMux(srv.httpServeMux)
+	go srv.serveHTTP()
+	srv.doSSDP()
+	panic("unreachable")
 }
 
 // Stops the server
 func (me *Server) Close() {
-	me.httpConn.Close()
+	me.HTTPConn.Close()
 }
 
 func didl_lite(chardata string) string {
