@@ -1,3 +1,4 @@
+// Package futures emulates Python's concurrent.futures package as well as is possible with Go's lack of parametric types.
 package futures
 
 import (
