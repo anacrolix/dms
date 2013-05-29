@@ -218,6 +218,7 @@ func MimeTypeByPath(path_ string) (ret string) {
 	return
 }
 
+// Turns the given entry and DMS host into a UPnP object.
 func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
 		ID: objectID{
@@ -315,11 +316,11 @@ func (server *Server) fileEntries(fileInfo os.FileInfo, parentPath string) []cds
 	}}
 }
 
-// Sufficient information to determine how many entries to each actual file
+// A content directory service entry contains sufficient information to determine how many entries to each actual file.
 type cdsEntry struct {
 	FileInfo os.FileInfo // file type. names would do but it's cheaper to do this upfront.
-	Path     string
-	ParentID string
+	Path     string      // local filesystem path
+	ParentID string      // the entry's parent's ID
 }
 
 type fileInfoSlice []os.FileInfo
