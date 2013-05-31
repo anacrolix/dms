@@ -254,7 +254,6 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		Object: obj,
 		Res: func() (ret []upnpav.Resource) {
 			ret = append(ret, func() upnpav.Resource {
-				log.Print(entry.Path)
 				return upnpav.Resource{
 					URL: (&url.URL{
 						Scheme: "http",
