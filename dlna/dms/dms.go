@@ -237,6 +237,9 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	}
 	mimeType := MimeTypeByPath(entry.Path)
 	mimeTypeType := strings.SplitN(mimeType, "/", 2)[0]
+	if !isMedia(mimeTypeType) {
+		return nil
+	}
 	obj.Class = "object.item." + mimeTypeType + "Item"
 	ffInfo, err := ffmpeg.Probe(entry.Path)
 	err = suppressFFmpegProbeDataErrors(err)
@@ -251,6 +254,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		Object: obj,
 		Res: func() (ret []upnpav.Resource) {
 			ret = append(ret, func() upnpav.Resource {
+				log.Print(entry.Path)
 				return upnpav.Resource{
 					URL: (&url.URL{
 						Scheme: "http",
@@ -304,6 +308,10 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 			return
 		}(),
 	}
+}
+
+func isMedia(mimeTypeType string) (result bool) {
+	return mimeTypeType == "video" || mimeTypeType == "audio"
 }
 
 func (server *Server) fileEntries(fileInfo os.FileInfo, parentPath string) []cdsEntry {
@@ -366,7 +374,9 @@ func (me *Server) readContainer(path_, parentID, host string) (ret []interface{}
 		}()
 		return ret
 	}()) {
-		ret = append(ret, obj)
+		if obj != nil {
+			ret = append(ret, obj)
+		}
 	}
 	return
 }
