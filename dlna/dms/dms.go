@@ -141,13 +141,7 @@ type Server struct {
 }
 
 func (me *Server) childCount(path_ string) int {
-	f, err := os.Open(path_)
-	if err != nil {
-		log.Println(err)
-		return 0
-	}
-	defer f.Close()
-	fis, err := f.Readdir(-1)
+	fis, err := readDir(path_)
 	if err != nil {
 		log.Println(err)
 		return 0
@@ -344,15 +338,27 @@ func (me fileInfoSlice) Swap(i, j int) {
 	me[i], me[j] = me[j], me[i]
 }
 
-func (me *Server) readContainer(path_, parentID, host string) (ret []interface{}) {
-	dir, err := os.Open(path_)
+func readDir(dirPath string) (fileInfoSlice, error) {
+	dir, err := os.Open(dirPath)
 	if err != nil {
-		log.Println(err)
-		return
+		return nil, err
 	}
 	defer dir.Close()
 	var fis fileInfoSlice
-	fis, err = dir.Readdir(-1)
+	var dirContent []string
+	dirContent, err = dir.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
+	fis = make(fileInfoSlice, len(dirContent))
+	for i, file := range dirContent {
+		fis[i], _ = os.Stat(path.Join(dirPath, file))
+	}
+	return fis, nil
+}
+
+func (me *Server) readContainer(path_, parentID, host string) (ret []interface{}) {
+	fis, err := readDir(path_)
 	if err != nil {
 		panic(err)
 	}
