@@ -147,7 +147,7 @@ func (me *Server) childCount(path_ string) int {
 		return 0
 	}
 	ret := 0
-	for _, fi := range fis {
+	for _, fi := range fis.fileInfoSlice {
 		ret += len(me.fileEntries(fi, path_))
 	}
 	return ret
@@ -325,49 +325,53 @@ type cdsEntry struct {
 }
 
 type fileInfoSlice []os.FileInfo
-
-func (me fileInfoSlice) Len() int {
-	return len(me)
+type sortableFileInfoSlice struct {
+	fileInfoSlice
+	FoldersLast bool
 }
 
-func (me fileInfoSlice) Less(i, j int) bool {
-	if me[i].IsDir() && !me[j].IsDir() {
-		return true
+func (me sortableFileInfoSlice) Len() int {
+	return len(me.fileInfoSlice)
+}
+
+func (me sortableFileInfoSlice) Less(i, j int) bool {
+	if me.fileInfoSlice[i].IsDir() && !me.fileInfoSlice[j].IsDir() {
+		return !me.FoldersLast
 	}
-	if !me[i].IsDir() && me[j].IsDir() {
-		return false
+	if !me.fileInfoSlice[i].IsDir() && me.fileInfoSlice[j].IsDir() {
+		return me.FoldersLast
 	}
-	return strings.ToLower(me[i].Name()) < strings.ToLower(me[j].Name())
+	return strings.ToLower(me.fileInfoSlice[i].Name()) < strings.ToLower(me.fileInfoSlice[j].Name())
 }
 
-func (me fileInfoSlice) Swap(i, j int) {
-	me[i], me[j] = me[j], me[i]
+func (me sortableFileInfoSlice) Swap(i, j int) {
+	me.fileInfoSlice[i], me.fileInfoSlice[j] = me.fileInfoSlice[j], me.fileInfoSlice[i]
 }
 
-func readDir(dirPath string) (fileInfoSlice, error) {
+func readDir(dirPath string) (sortableFileInfoSlice, error) {
 	dir, err := os.Open(dirPath)
 	if err != nil {
-		return nil, err
+		return sortableFileInfoSlice{}, err
 	}
 	defer dir.Close()
-	var fis fileInfoSlice
 	var dirContent []string
 	dirContent, err = dir.Readdirnames(-1)
 	if err != nil {
-		return nil, err
+		return sortableFileInfoSlice{}, err
 	}
-	fis = make(fileInfoSlice, len(dirContent))
+	fis := sortableFileInfoSlice{fileInfoSlice: make(fileInfoSlice, len(dirContent))}
 	for i, file := range dirContent {
-		fis[i], _ = os.Stat(path.Join(dirPath, file))
+		fis.fileInfoSlice[i], _ = os.Stat(path.Join(dirPath, file))
 	}
 	return fis, nil
 }
 
-func (me *Server) readContainer(path_, parentID, host string) (ret []interface{}) {
+func (me *Server) readContainer(path_, parentID, host, userAgent string) (ret []interface{}) {
 	fis, err := readDir(path_)
 	if err != nil {
 		panic(err)
 	}
+	fis.FoldersLast = userAgent == `AwoX/1.1 UPnP/1.0 DLNADOC/1.50`
 	sort.Sort(fis)
 	pool := futures.NewExecutor(runtime.NumCPU())
 	defer pool.Shutdown()
@@ -376,7 +380,7 @@ func (me *Server) readContainer(path_, parentID, host string) (ret []interface{}
 	}, func() <-chan interface{} {
 		ret := make(chan interface{})
 		go func() {
-			for _, fi := range fis {
+			for _, fi := range fis.fileInfoSlice {
 				for _, entry := range me.fileEntries(fi, path_) {
 					ret <- entry
 				}
@@ -446,7 +450,7 @@ func (me *Server) parseObjectID(id string) (ret objectID) {
 	return
 }
 
-func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host string) (map[string]string, *upnp.Error) {
+func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host, userAgent string) (map[string]string, *upnp.Error) {
 	switch sa.Action {
 	case "GetSortCapabilities":
 		return map[string]string{
@@ -460,7 +464,7 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		objectID := me.parseObjectID(browse.ObjectID)
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
-			objs := me.readContainer(objectID.Path, browse.ObjectID, host)
+			objs := me.readContainer(objectID.Path, browse.ObjectID, host, userAgent)
 			totalMatches := len(objs)
 			objs = objs[browse.StartingIndex:]
 			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
@@ -636,11 +640,13 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
 			panic(err)
 		}
+		//AwoX/1.1 UPnP/1.0 DLNADOC/1.50
+		//log.Println(r.UserAgent())
 		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 		w.Header().Set("Ext", "")
 		w.Header().Set("Server", serverField)
 		actionResponseXML, err := xml.MarshalIndent(func() interface{} {
-			argMap, err := server.contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host)
+			argMap, err := server.contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host, r.UserAgent())
 			if err != nil {
 				w.WriteHeader(500)
 				return soap.NewFault("UPnPError", err)
