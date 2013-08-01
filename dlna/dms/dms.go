@@ -371,7 +371,7 @@ func (me *Server) readContainer(path_, parentID, host, userAgent string) (ret []
 	if err != nil {
 		panic(err)
 	}
-	fis.FoldersLast = userAgent == `AwoX/1.1 UPnP/1.0 DLNADOC/1.50`
+	fis.FoldersLast = strings.Contains(userAgent, `AwoX/1.1`)
 	sort.Sort(fis)
 	pool := futures.NewExecutor(runtime.NumCPU())
 	defer pool.Shutdown()
