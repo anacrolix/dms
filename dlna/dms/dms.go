@@ -331,6 +331,12 @@ func (me fileInfoSlice) Len() int {
 }
 
 func (me fileInfoSlice) Less(i, j int) bool {
+	if me[i].IsDir() && !me[j].IsDir() {
+		return true
+	}
+	if !me[i].IsDir() && me[j].IsDir() {
+		return false
+	}
 	return strings.ToLower(me[i].Name()) < strings.ToLower(me[j].Name())
 }
 
