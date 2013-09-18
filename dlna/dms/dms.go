@@ -651,12 +651,13 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		soapActionString := r.Header.Get("SOAPACTION")
 		soapAction, ok := upnp.ParseActionHTTPHeader(soapActionString)
 		if !ok {
-			log.Println("invalid soapaction:", soapActionString)
+			http.Error(w, fmt.Sprintf("invalid soapaction: %#v", soapActionString), http.StatusBadRequest)
 			return
 		}
 		var env soap.Envelope
 		if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
-			panic(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		//AwoX/1.1 UPnP/1.0 DLNADOC/1.50
 		//log.Println(r.UserAgent())
