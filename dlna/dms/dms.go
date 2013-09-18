@@ -14,6 +14,7 @@ import (
 	"encoding/ascii85"
 	"encoding/gob"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -439,26 +440,24 @@ func (me objectID) Encode(rootPath string) string {
 	return "1" + string(dst[:n])
 }
 
-func (me *Server) parseObjectID(id string) (ret objectID) {
+func (me *Server) parseObjectID(id string) (oid objectID, err error) {
 	if id == "0" {
-		ret.Path = me.RootObjectPath
+		oid.Path = me.RootObjectPath
 		return
 	}
 	if id[0] != '1' {
-		panic(id)
+		err = errors.New("invalid object id")
+		return
 	}
 	id = id[1:]
 	dst := make([]byte, len(id))
-	ndst, nsrc, err := ascii85.Decode(dst, []byte(id), true)
+	ndst, _, err := ascii85.Decode(dst, []byte(id), true)
 	if err != nil {
-		panic(err)
-	}
-	if nsrc != len(id) {
-		panic(nsrc)
+		return
 	}
 	dec := gob.NewDecoder(bytes.NewReader(dst[:ndst]))
-	if err := dec.Decode(&ret); err != nil {
-		panic(err)
+	if err = dec.Decode(&oid); err != nil {
+		return
 	}
 	return
 }
@@ -474,7 +473,13 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
 			panic(err)
 		}
-		objectID := me.parseObjectID(browse.ObjectID)
+		objectID, err := me.parseObjectID(browse.ObjectID)
+		if err != nil {
+			return nil, &upnp.Error{
+				Code: upnpav.NoSuchObjectErrorCode,
+				Desc: err.Error(),
+			}
+		}
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
 			objs := me.readContainer(objectID.Path, browse.ObjectID, host, userAgent)
