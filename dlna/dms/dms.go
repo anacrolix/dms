@@ -272,16 +272,16 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 					Size:     uint64(entry.FileInfo.Size()),
 					Resolution: func() string {
 						if probeErr == nil {
-						for _, strm := range ffInfo.Streams {
-							if strm["codec_type"] != "video" {
-								continue
+							for _, strm := range ffInfo.Streams {
+								if strm["codec_type"] != "video" {
+									continue
+								}
+								width := strm["width"]
+								height := strm["height"]
+								if width != "" && height != "" {
+									return fmt.Sprintf("%sx%s", width, height)
+								}
 							}
-							width := strm["width"]
-							height := strm["height"]
-							if width != "" && height != "" {
-								return fmt.Sprintf("%sx%s", width, height)
-							}
-						}
 						}
 						return ""
 					}(),
