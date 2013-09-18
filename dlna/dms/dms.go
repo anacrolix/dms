@@ -197,6 +197,11 @@ func (me *Server) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string
 
 // Used to determine the MIME-type for the given path
 func MimeTypeByPath(path_ string) (ret string) {
+	defer func() {
+		if ret == "video/x-msvideo" {
+			ret = "video/avi"
+		}
+	}()
 	ext := strings.ToLower(path.Ext(path_))
 	ret = mime.TypeByExtension(ext)
 	if ret != "" {
