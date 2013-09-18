@@ -1,0 +1,1 @@
+ * Reintegrate ffprobe error suppression into the ffmpeg.Probe function

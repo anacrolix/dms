@@ -235,12 +235,18 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		return nil
 	}
 	obj.Class = "object.item." + mimeTypeType + "Item"
-	ffInfo, err := ffmpeg.Probe(entry.Path)
-	err = suppressFFmpegProbeDataErrors(err)
-	if err != nil {
-		log.Printf("error probing %s: %s", entry.Path, err)
+	var (
+		nativeBitrate uint
+		duration      string
+	)
+	ffInfo, probeErr := ffmpeg.Probe(entry.Path)
+	switch probeErr {
+	case nil:
+		nativeBitrate, duration = me.itemResExtra(ffInfo)
+	case ffmpeg.FfprobeUnavailableError:
+	default:
+		log.Printf("error probing %s: %s", entry.Path, probeErr)
 	}
-	nativeBitrate, duration := me.itemResExtra(ffInfo)
 	if obj.Title == "" {
 		obj.Title = entry.FileInfo.Name()
 	}
@@ -264,6 +270,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 					Duration: duration,
 					Size:     uint64(entry.FileInfo.Size()),
 					Resolution: func() string {
+						if probeErr == nil {
 						for _, strm := range ffInfo.Streams {
 							if strm["codec_type"] != "video" {
 								continue
@@ -273,6 +280,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 							if width != "" && height != "" {
 								return fmt.Sprintf("%sx%s", width, height)
 							}
+						}
 						}
 						return ""
 					}(),

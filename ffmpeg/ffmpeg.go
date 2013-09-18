@@ -66,9 +66,12 @@ func init() {
 	}
 }
 
+var FfprobeUnavailableError = errors.New("ffprobe not available")
+
 func probeUncached(path string) (info *Info, err error) {
 	if ffprobePath == "" {
-		return nil, nil
+		err = FfprobeUnavailableError
+		return
 	}
 	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", path)
 	setHideWindow(cmd)
