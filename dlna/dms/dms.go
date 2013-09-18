@@ -148,7 +148,7 @@ func (me *Server) childCount(path_ string) int {
 		return 0
 	}
 	ret := 0
-	for _, fi := range fis.fileInfoSlice {
+	for _, fi := range fis {
 		ret += len(me.fileEntries(fi, path_))
 	}
 	return ret
@@ -357,36 +357,38 @@ func (me sortableFileInfoSlice) Swap(i, j int) {
 	me.fileInfoSlice[i], me.fileInfoSlice[j] = me.fileInfoSlice[j], me.fileInfoSlice[i]
 }
 
-func readDir(dirPath string) (sortableFileInfoSlice, error) {
+func readDir(dirPath string) (fis fileInfoSlice, err error) {
 	dir, err := os.Open(dirPath)
 	if err != nil {
-		return sortableFileInfoSlice{}, err
+		return
 	}
 	defer dir.Close()
 	var dirContent []string
 	dirContent, err = dir.Readdirnames(-1)
 	if err != nil {
-		return sortableFileInfoSlice{}, err
+		return
 	}
-	fis := sortableFileInfoSlice{fileInfoSlice: make(fileInfoSlice, 0, len(dirContent))}
+	fis = make(fileInfoSlice, 0, len(dirContent))
 	for _, file := range dirContent {
 		fi, err := os.Stat(path.Join(dirPath, file))
 		if err != nil {
 			log.Print(err)
 			continue
 		}
-		fis.fileInfoSlice = append(fis.fileInfoSlice, fi)
+		fis = append(fis, fi)
 	}
-	return fis, nil
+	return
 }
 
-func (me *Server) readContainer(path_, parentID, host, userAgent string) (ret []interface{}) {
-	fis, err := readDir(path_)
-	if err != nil {
-		panic(err)
+func (me *Server) readContainer(path_, parentID, host, userAgent string) (ret []interface{}, err error) {
+	sfis := sortableFileInfoSlice{
+		FoldersLast: strings.Contains(userAgent, `AwoX/1.1`),
 	}
-	fis.FoldersLast = strings.Contains(userAgent, `AwoX/1.1`)
-	sort.Sort(fis)
+	sfis.fileInfoSlice, err = readDir(path_)
+	if err != nil {
+		return
+	}
+	sort.Sort(sfis)
 	pool := futures.NewExecutor(runtime.NumCPU())
 	defer pool.Shutdown()
 	for obj := range pool.Map(func(entry interface{}) interface{} {
@@ -394,7 +396,7 @@ func (me *Server) readContainer(path_, parentID, host, userAgent string) (ret []
 	}, func() <-chan interface{} {
 		ret := make(chan interface{})
 		go func() {
-			for _, fi := range fis.fileInfoSlice {
+			for _, fi := range sfis.fileInfoSlice {
 				for _, entry := range me.fileEntries(fi, path_) {
 					ret <- entry
 				}
@@ -482,7 +484,14 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		}
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
-			objs := me.readContainer(objectID.Path, browse.ObjectID, host, userAgent)
+			objs, err := me.readContainer(objectID.Path, browse.ObjectID, host, userAgent)
+			if err != nil {
+				return nil, &upnp.Error{
+					// readContainer can only fail due to bad ObjectID afaict
+					Code: upnpav.NoSuchObjectErrorCode,
+					Desc: err.Error(),
+				}
+			}
 			totalMatches := len(objs)
 			objs = objs[browse.StartingIndex:]
 			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
