@@ -367,9 +367,14 @@ func readDir(dirPath string) (sortableFileInfoSlice, error) {
 	if err != nil {
 		return sortableFileInfoSlice{}, err
 	}
-	fis := sortableFileInfoSlice{fileInfoSlice: make(fileInfoSlice, len(dirContent))}
-	for i, file := range dirContent {
-		fis.fileInfoSlice[i], _ = os.Stat(path.Join(dirPath, file))
+	fis := sortableFileInfoSlice{fileInfoSlice: make(fileInfoSlice, 0, len(dirContent))}
+	for _, file := range dirContent {
+		fi, err := os.Stat(path.Join(dirPath, file))
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		fis.fileInfoSlice = append(fis.fileInfoSlice, fi)
 	}
 	return fis, nil
 }
