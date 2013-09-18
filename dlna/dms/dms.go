@@ -664,11 +664,10 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 		w.Header().Set("Ext", "")
 		w.Header().Set("Server", serverField)
-		actionResponseXML, err := xml.MarshalIndent(func() interface{} {
+		soapResponseBody, httpResponseStatus := func() (interface{}, int) {
 			argMap, err := server.contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host, r.UserAgent())
 			if err != nil {
-				w.WriteHeader(500)
-				return soap.NewFault("UPnPError", err)
+				return soap.NewFault("UPnPError", err), 500
 			}
 			args := make([]soap.Arg, 0, len(argMap))
 			for argName, value := range argMap {
@@ -683,8 +682,9 @@ func (server *Server) initMux(mux *http.ServeMux) {
 					Local: soapAction.Action + "Response",
 				},
 				Args: args,
-			}
-		}(), "", "  ")
+			}, 200
+		}()
+		actionResponseXML, err := xml.MarshalIndent(soapResponseBody, "", "  ")
 		if err != nil {
 			panic(err)
 		}
@@ -693,6 +693,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			panic(err)
 		}
 		body = append([]byte(xml.Header), body...)
+		w.WriteHeader(httpResponseStatus)
 		if _, err := w.Write(body); err != nil {
 			panic(err)
 		}
