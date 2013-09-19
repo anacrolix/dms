@@ -643,11 +643,6 @@ func init() {
 	startTime = time.Now()
 }
 
-// Changes the root path shared by the server
-func (me *Server) ChangeRootPath(path string) {
-	me.RootObjectPath = path
-}
-
 func getDefaultFriendlyName() string {
 	return fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
 		user, err := user.Current()
@@ -786,11 +781,6 @@ func (srv *Server) Serve() (err error) {
 	go srv.serveHTTP()
 	srv.doSSDP()
 	panic("unreachable")
-}
-
-// Stops the server
-func (me *Server) Close() {
-	me.HTTPConn.Close()
 }
 
 func didl_lite(chardata string) string {
