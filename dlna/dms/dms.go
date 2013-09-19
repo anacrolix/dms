@@ -195,15 +195,42 @@ func (me *Server) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string
 	return
 }
 
+// Example: "video/mpeg"
+type MimeType string
+
+// Attempts to guess mime type by peeling off extensions, such as those given
+// to incomplete files.
+func mimeTypeByBaseName(name string) MimeType {
+	for name != "" {
+		ext := strings.ToLower(path.Ext(name))
+		if ext == "" {
+			break
+		}
+		ret := MimeType(mime.TypeByExtension(ext))
+		if ret.Type().IsMedia() {
+			return ret
+		}
+		switch ext {
+		case ".part":
+			index := strings.LastIndex(name, ".")
+			if index >= 0 {
+				name = name[:index]
+			}
+		default:
+			return ""
+		}
+	}
+	return ""
+}
+
 // Used to determine the MIME-type for the given path
-func MimeTypeByPath(path_ string) (ret string) {
+func MimeTypeByPath(path_ string) (ret MimeType) {
 	defer func() {
 		if ret == "video/x-msvideo" {
 			ret = "video/avi"
 		}
 	}()
-	ext := strings.ToLower(path.Ext(path_))
-	ret = mime.TypeByExtension(ext)
+	ret = mimeTypeByBaseName(path.Base(path_))
 	if ret != "" {
 		return
 	}
@@ -214,8 +241,13 @@ func MimeTypeByPath(path_ string) (ret string) {
 	var data [512]byte
 	n, _ := file.Read(data[:])
 	file.Close()
-	ret = http.DetectContentType(data[:n])
+	ret = MimeType(http.DetectContentType(data[:n]))
 	return
+}
+
+// Returns the group "type", the part before the '/'.
+func (mt MimeType) Type() MimeTypeType {
+	return MimeTypeType(strings.SplitN(string(mt), "/", 2)[0])
 }
 
 // Turns the given entry and DMS host into a UPnP object.
@@ -236,11 +268,11 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		}
 	}
 	mimeType := MimeTypeByPath(entry.Path)
-	mimeTypeType := strings.SplitN(mimeType, "/", 2)[0]
-	if !isMedia(mimeTypeType) {
+	mimeTypeType := mimeType.Type()
+	if !mimeTypeType.IsMedia() {
 		return nil
 	}
-	obj.Class = "object.item." + mimeTypeType + "Item"
+	obj.Class = "object.item." + string(mimeTypeType) + "Item"
 	var (
 		nativeBitrate uint
 		duration      string
@@ -317,8 +349,17 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	}
 }
 
-func isMedia(mimeTypeType string) (result bool) {
-	return mimeTypeType == "video" || mimeTypeType == "audio"
+// The part of a MIME type before the '/'.
+type MimeTypeType string
+
+// Returns true if the type is typical media.
+func (mtt MimeTypeType) IsMedia() bool {
+	switch mtt {
+	case "video", "audio":
+		return true
+	default:
+		return false
+	}
 }
 
 func (server *Server) fileEntries(fileInfo os.FileInfo, parentPath string) []cdsEntry {
