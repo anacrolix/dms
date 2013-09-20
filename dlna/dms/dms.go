@@ -476,7 +476,7 @@ func (me *Server) objectIdPath(oid string) (path string, err error) {
 	switch {
 	case oid == "0":
 		path = me.RootObjectPath
-	case len(oid) > 1 && oid[0] == '1':
+	case len(oid) > 0 && oid[0] == '1':
 		path = oid[1:]
 	default:
 		err = errors.New("invalid ObjectID")
