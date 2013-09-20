@@ -1,1 +1,2 @@
- * Reintegrate ffprobe error suppression into the ffmpeg.Probe function
+* Reintegrate ffprobe error suppression into the ffmpeg.Probe function
+* Replace panics with proper error handling throughout the codebase.
