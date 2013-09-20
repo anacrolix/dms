@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 )
 
 func main() {
@@ -59,6 +60,6 @@ func main() {
 			return conn
 		}(),
 		FriendlyName:   *friendlyName,
-		RootObjectPath: *path,
+		RootObjectPath: filepath.Clean(*path),
 	}).Serve()
 }

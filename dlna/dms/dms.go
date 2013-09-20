@@ -11,8 +11,6 @@ import (
 	"bitbucket.org/anacrolix/dms/upnpav"
 	"bytes"
 	"crypto/md5"
-	"encoding/ascii85"
-	"encoding/gob"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -25,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -253,9 +252,7 @@ func (mt MimeType) Type() MimeTypeType {
 // Turns the given entry and DMS host into a UPnP object.
 func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
-		ID: objectID{
-			Path: entry.Path,
-		}.Encode(me.RootObjectPath),
+		ID:         me.pathObjectId(entry.Path),
 		Restricted: 1,
 		ParentID:   entry.ParentID,
 	}
@@ -366,9 +363,7 @@ func (server *Server) fileEntries(fileInfo os.FileInfo, parentPath string) []cds
 	return []cdsEntry{{
 		FileInfo: fileInfo,
 		Path:     path.Join(parentPath, fileInfo.Name()),
-		ParentID: objectID{
-			Path: parentPath,
-		}.Encode(server.RootObjectPath),
+		ParentID: server.pathObjectId(parentPath),
 	}}
 }
 
@@ -426,7 +421,7 @@ func readDir(dirPath string) (fis fileInfoSlice, err error) {
 	return
 }
 
-func (me *Server) readContainer(path_, parentID, host, userAgent string) (ret []interface{}, err error) {
+func (me *Server) readContainer(path_, host, userAgent string) (ret []interface{}, err error) {
 	sfis := sortableFileInfoSlice{
 		FoldersLast: strings.Contains(userAgent, `AwoX/1.1`),
 	}
@@ -466,46 +461,25 @@ type browse struct {
 	RequestedCount int
 }
 
-type objectID struct {
-	Path      string
-	Transcode bool
-}
-
-func (me objectID) Encode(rootPath string) string {
-	switch me.Path {
-	case rootPath:
+func (me *Server) pathObjectId(path string) string {
+	switch path {
+	case me.RootObjectPath:
 		return "0"
-	case path.Dir(rootPath):
+	case filepath.Dir(me.RootObjectPath):
 		return "-1"
+	default:
+		return "1" + path
 	}
-	w := &bytes.Buffer{}
-	enc := gob.NewEncoder(w)
-	if err := enc.Encode(me); err != nil {
-		panic(err)
-	}
-	dst := make([]byte, ascii85.MaxEncodedLen(w.Len()))
-	n := ascii85.Encode(dst, w.Bytes())
-	return "1" + string(dst[:n])
 }
 
-func (me *Server) parseObjectID(id string) (oid objectID, err error) {
-	if id == "0" {
-		oid.Path = me.RootObjectPath
-		return
-	}
-	if id[0] != '1' {
-		err = errors.New("invalid object id")
-		return
-	}
-	id = id[1:]
-	dst := make([]byte, len(id))
-	ndst, _, err := ascii85.Decode(dst, []byte(id), true)
-	if err != nil {
-		return
-	}
-	dec := gob.NewDecoder(bytes.NewReader(dst[:ndst]))
-	if err = dec.Decode(&oid); err != nil {
-		return
+func (me *Server) objectIdPath(oid string) (path string, err error) {
+	switch {
+	case oid == "0":
+		path = me.RootObjectPath
+	case len(oid) > 1 && oid[0] == '1':
+		path = oid[1:]
+	default:
+		err = errors.New("invalid ObjectID")
 	}
 	return
 }
@@ -521,7 +495,7 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
 			panic(err)
 		}
-		objectID, err := me.parseObjectID(browse.ObjectID)
+		path, err := me.objectIdPath(browse.ObjectID)
 		if err != nil {
 			return nil, &upnp.Error{
 				Code: upnpav.NoSuchObjectErrorCode,
@@ -530,7 +504,7 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		}
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
-			objs, err := me.readContainer(objectID.Path, browse.ObjectID, host, userAgent)
+			objs, err := me.readContainer(path, host, userAgent)
 			if err != nil {
 				return nil, &upnp.Error{
 					// readContainer can only fail due to bad ObjectID afaict
@@ -554,7 +528,7 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 				"UpdateID":       fmt.Sprintf("%d", uint32(time.Now().Unix())),
 			}, nil
 		case "BrowseMetadata":
-			fileInfo, err := os.Stat(objectID.Path)
+			fileInfo, err := os.Stat(path)
 			if err != nil {
 				return nil, &upnp.Error{
 					Code: upnpav.NoSuchObjectErrorCode,
@@ -566,9 +540,9 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 				"NumberReturned": "1",
 				"Result": didl_lite(func() string {
 					buf, err := xml.MarshalIndent(me.entryObject(cdsEntry{
-						ParentID: browse.ObjectID,
+						ParentID: me.pathObjectId(filepath.Dir(path)),
 						FileInfo: fileInfo,
-						Path:     objectID.Path,
+						Path:     path,
 					}, host), "", "  ")
 					if err != nil {
 						panic(err) // because aliens
