@@ -5,16 +5,19 @@ import (
 	"bitbucket.org/anacrolix/dms/ffmpeg"
 	"bitbucket.org/anacrolix/dms/futures"
 	"bitbucket.org/anacrolix/dms/misc"
+	"bitbucket.org/anacrolix/dms/rrcache"
 	"bitbucket.org/anacrolix/dms/soap"
 	"bitbucket.org/anacrolix/dms/ssdp"
 	"bitbucket.org/anacrolix/dms/upnp"
 	"bitbucket.org/anacrolix/dms/upnpav"
 	"bytes"
 	"crypto/md5"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime"
 	"net"
@@ -27,6 +30,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -41,6 +45,7 @@ const (
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	contentDirectoryControlURL  = "/ctl/ContentDirectory"
 	transcodeMimeType           = "video/mpeg"
+	ffprobeCacheFileName        = ".dms-ffprobe-cache"
 )
 
 func makeDeviceUuid(unique string) string {
@@ -131,13 +136,17 @@ var (
 )
 
 type Server struct {
-	HTTPConn       net.Listener
-	FriendlyName   string
-	Interfaces     []net.Interface
-	httpServeMux   *http.ServeMux
-	RootObjectPath string
-	rootDescXML    []byte
-	rootDeviceUUID string
+	HTTPConn        net.Listener
+	FriendlyName    string
+	Interfaces      []net.Interface
+	httpServeMux    *http.ServeMux
+	RootObjectPath  string
+	rootDescXML     []byte
+	rootDeviceUUID  string
+	ffmpegInfoCache struct {
+		sync.Mutex
+		*rrcache.RRCache
+	}
 }
 
 func (me *Server) childCount(path_ string) int {
@@ -249,6 +258,34 @@ func (mt MimeType) Type() MimeTypeType {
 	return MimeTypeType(strings.SplitN(string(mt), "/", 2)[0])
 }
 
+type ffmpegInfoCacheKey struct {
+	Path    string
+	ModTime int64
+}
+
+func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	key := ffmpegInfoCacheKey{path, fi.ModTime().UnixNano()}
+	srv.ffmpegInfoCache.Lock()
+	value, ok := srv.ffmpegInfoCache.Get(key)
+	srv.ffmpegInfoCache.Unlock()
+	if !ok {
+		info, err = ffmpeg.Probe(path)
+		srv.ffmpegInfoCache.Lock()
+		srv.ffmpegInfoCache.Add(key, info, 1)
+		if err := srv.saveFfprobeCache(); err != nil {
+			log.Print(err)
+		}
+		srv.ffmpegInfoCache.Unlock()
+		return
+	}
+	info = value.(*ffmpeg.Info)
+	return
+}
+
 // Turns the given entry and DMS host into a UPnP object.
 func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
@@ -274,9 +311,11 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		nativeBitrate uint
 		duration      string
 	)
-	ffInfo, probeErr := ffmpeg.Probe(entry.Path)
+	startTime := time.Now()
+	ffInfo, probeErr := me.ffmpegProbe(entry.Path)
 	switch probeErr {
 	case nil:
+		log.Printf("probe %#v took %s", entry.Path, time.Now().Sub(startTime))
 		nativeBitrate, duration = me.itemResExtra(ffInfo)
 	case ffmpeg.FfprobeUnavailableError:
 	default:
@@ -724,6 +763,60 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 }
 
+func (srv *Server) loadFfprobeCache() error {
+	_user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(filepath.Join(_user.HomeDir, ffprobeCacheFileName))
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return err
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	var items []struct {
+		Key   ffmpegInfoCacheKey
+		Value *ffmpeg.Info
+	}
+	err = dec.Decode(&items)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		srv.ffmpegInfoCache.Add(item.Key, item.Value, 1)
+	}
+	log.Printf("added %d items from cache", len(items))
+	return nil
+}
+
+func (srv *Server) saveFfprobeCache() error {
+	_user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			err := os.Remove(f.Name())
+			if err != nil {
+				log.Print(err)
+			}
+		}
+	}()
+	enc := json.NewEncoder(f)
+	err = enc.Encode(srv.ffmpegInfoCache.Items())
+	if err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), filepath.Join(_user.HomeDir, ".dms-ffprobe-cache"))
+}
+
 func (srv *Server) Serve() (err error) {
 	if srv.FriendlyName == "" {
 		srv.FriendlyName = getDefaultFriendlyName()
@@ -747,8 +840,10 @@ func (srv *Server) Serve() (err error) {
 		return
 	}
 	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
+	srv.ffmpegInfoCache.RRCache = rrcache.New(8)
+	err = srv.loadFfprobeCache()
 	if err != nil {
-		return
+		return err
 	}
 	log.Println("HTTP srv on", srv.HTTPConn.Addr())
 	srv.initMux(srv.httpServeMux)

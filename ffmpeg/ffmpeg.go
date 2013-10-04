@@ -1,16 +1,13 @@
 package ffmpeg
 
 import (
-	"bitbucket.org/anacrolix/dms/cache"
 	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 type Info struct {
@@ -68,7 +65,7 @@ func init() {
 
 var FfprobeUnavailableError = errors.New("ffprobe not available")
 
-func probeUncached(path string) (info *Info, err error) {
+func Probe(path string) (info *Info, err error) {
 	if ffprobePath == "" {
 		err = FfprobeUnavailableError
 		return
@@ -124,22 +121,4 @@ func probeUncached(path string) (info *Info, err error) {
 		}
 	}
 	return info, nil
-}
-
-type probeStamp time.Time
-
-var probeCache *cache.Cache = cache.New()
-
-func Probe(path string) (info *Info, err error) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return
-	}
-	stamp := fi.ModTime()
-	data, err := probeCache.Get(path, stamp, func() (cache.Data, cache.Stamp, error) {
-		info, err := probeUncached(path)
-		return info, stamp, err
-	})
-	info = data.(*Info)
-	return
 }
