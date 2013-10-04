@@ -35,7 +35,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	(&dms.Server{
+	err := (&dms.Server{
 		Interfaces: func(ifName string) (ifs []net.Interface) {
 			var err error
 			if ifName == "" {
@@ -62,4 +62,5 @@ func main() {
 		FriendlyName:   *friendlyName,
 		RootObjectPath: filepath.Clean(*path),
 	}).Serve()
+	log.Fatal(err)
 }
