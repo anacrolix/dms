@@ -24,7 +24,11 @@ func New(capacity int64) *RRCache {
 	}
 }
 
-func (c *RRCache) Add(key interface{}, value interface{}, size int64) {
+func (c *RRCache) Size() int64 {
+	return c.size
+}
+
+func (c *RRCache) Set(key interface{}, value interface{}, size int64) {
 	if size > c.capacity {
 		return
 	}
