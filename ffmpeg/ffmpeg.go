@@ -87,6 +87,9 @@ func Probe(path string) (info *Info, err error) {
 		if waitErr != nil {
 			err = waitErr
 		}
+		if err != nil {
+			info = nil
+		}
 	}()
 	for {
 		line, err := readLine(r)
@@ -117,7 +120,7 @@ func Probe(path string) (info *Info, err error) {
 			}
 			info.Streams = append(info.Streams, m)
 		default:
-			return nil, errors.New(fmt.Sprint("unknown section:", line))
+			return nil, fmt.Errorf("unknown section: %v", line)
 		}
 	}
 	return info, nil

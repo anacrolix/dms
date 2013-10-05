@@ -269,6 +269,7 @@ type ffmpegInfoCacheKey struct {
 	ModTime int64
 }
 
+// Can return nil info with nil err if an earlier Probe gave an error.
 func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -310,12 +311,12 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		nativeBitrate uint
 		duration      string
 	)
-	startTime := time.Now()
 	ffInfo, probeErr := me.ffmpegProbe(entry.Path)
 	switch probeErr {
 	case nil:
-		log.Printf("probe %#v took %s", entry.Path, time.Now().Sub(startTime))
-		nativeBitrate, duration = me.itemResExtra(ffInfo)
+		if ffInfo != nil {
+			nativeBitrate, duration = me.itemResExtra(ffInfo)
+		}
 	case ffmpeg.FfprobeUnavailableError:
 	default:
 		log.Printf("error probing %s: %s", entry.Path, probeErr)
@@ -343,7 +344,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 					Duration: duration,
 					Size:     uint64(entry.FileInfo.Size()),
 					Resolution: func() string {
-						if probeErr == nil {
+						if ffInfo != nil {
 							for _, strm := range ffInfo.Streams {
 								if strm["codec_type"] != "video" {
 									continue
