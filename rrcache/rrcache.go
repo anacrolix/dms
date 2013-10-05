@@ -1,3 +1,6 @@
+// Package rrcache implements a random replacement cache. Items are set with
+// an associated size. When the capacity is exceeded, items will be randomly
+// evicted until it is not.
 package rrcache
 
 import (
@@ -24,6 +27,7 @@ func New(capacity int64) *RRCache {
 	}
 }
 
+// Returns the sum size of all items currently in the cache.
 func (c *RRCache) Size() int64 {
 	return c.size
 }
@@ -65,6 +69,8 @@ type Item struct {
 	Key, Value interface{}
 }
 
+// Return all items currently in the cache. This is made available for
+// serialization purposes.
 func (c *RRCache) Items() (itens []Item) {
 	for k, e := range c.table {
 		itens = append(itens, Item{k, e.value})
