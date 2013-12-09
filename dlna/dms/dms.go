@@ -87,10 +87,13 @@ func (me *Server) serveHTTP() {
 		}),
 	}
 	err := srv.Serve(me.HTTPConn)
-	log.Fatalln(err)
+	if me.closed {
+		return
+	}
+	log.Fatalf("%#v", err)
 }
 
-func (me *Server) doSSDP() {
+func (me *Server) doSSDP() error {
 	active := 0
 	stopped := make(chan struct{})
 	for _, if_ := range me.Interfaces {
@@ -123,7 +126,7 @@ func (me *Server) doSSDP() {
 		<-stopped
 		active--
 	}
-	log.Fatalln("no interfaces remain")
+	return errors.New("no interfaces remain")
 }
 
 var (
@@ -138,6 +141,18 @@ type Server struct {
 	RootObjectPath string
 	rootDescXML    []byte
 	rootDeviceUUID string
+	FFProbeCache   Cache
+	closed         bool
+}
+
+type Cache interface {
+	Set(key interface{}, value interface{})
+	Get(key interface{}) (value interface{}, ok bool)
+}
+
+type FFprobeCacheItem struct {
+	Key   ffmpegInfoCacheKey
+	Value *ffmpeg.Info
 }
 
 func (me *Server) childCount(path_ string) int {
@@ -249,6 +264,28 @@ func (mt MimeType) Type() MimeTypeType {
 	return MimeTypeType(strings.SplitN(string(mt), "/", 2)[0])
 }
 
+type ffmpegInfoCacheKey struct {
+	Path    string
+	ModTime int64
+}
+
+// Can return nil info with nil err if an earlier Probe gave an error.
+func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	key := ffmpegInfoCacheKey{path, fi.ModTime().UnixNano()}
+	value, ok := srv.FFProbeCache.Get(key)
+	if !ok {
+		info, err = ffmpeg.Probe(path)
+		srv.FFProbeCache.Set(key, info)
+		return
+	}
+	info = value.(*ffmpeg.Info)
+	return
+}
+
 // Turns the given entry and DMS host into a UPnP object.
 func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
@@ -274,10 +311,12 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		nativeBitrate uint
 		duration      string
 	)
-	ffInfo, probeErr := ffmpeg.Probe(entry.Path)
+	ffInfo, probeErr := me.ffmpegProbe(entry.Path)
 	switch probeErr {
 	case nil:
-		nativeBitrate, duration = me.itemResExtra(ffInfo)
+		if ffInfo != nil {
+			nativeBitrate, duration = me.itemResExtra(ffInfo)
+		}
 	case ffmpeg.FfprobeUnavailableError:
 	default:
 		log.Printf("error probing %s: %s", entry.Path, probeErr)
@@ -305,7 +344,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 					Duration: duration,
 					Size:     uint64(entry.FileInfo.Size()),
 					Resolution: func() string {
-						if probeErr == nil {
+						if ffInfo != nil {
 							for _, strm := range ffInfo.Streams {
 								if strm["codec_type"] != "video" {
 									continue
@@ -751,14 +790,15 @@ func (srv *Server) Serve() (err error) {
 		return
 	}
 	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
-	if err != nil {
-		return
-	}
 	log.Println("HTTP srv on", srv.HTTPConn.Addr())
 	srv.initMux(srv.httpServeMux)
 	go srv.serveHTTP()
-	srv.doSSDP()
-	panic("unreachable")
+	return srv.doSSDP()
+}
+
+func (srv *Server) Close() error {
+	srv.closed = true
+	return srv.HTTPConn.Close()
 }
 
 func didl_lite(chardata string) string {

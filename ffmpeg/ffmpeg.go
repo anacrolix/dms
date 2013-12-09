@@ -1,16 +1,13 @@
 package ffmpeg
 
 import (
-	"bitbucket.org/anacrolix/dms/cache"
 	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 type Info struct {
@@ -68,7 +65,7 @@ func init() {
 
 var FfprobeUnavailableError = errors.New("ffprobe not available")
 
-func probeUncached(path string) (info *Info, err error) {
+func Probe(path string) (info *Info, err error) {
 	if ffprobePath == "" {
 		err = FfprobeUnavailableError
 		return
@@ -89,6 +86,9 @@ func probeUncached(path string) (info *Info, err error) {
 		waitErr := cmd.Wait()
 		if waitErr != nil {
 			err = waitErr
+		}
+		if err != nil {
+			info = nil
 		}
 	}()
 	for {
@@ -120,26 +120,8 @@ func probeUncached(path string) (info *Info, err error) {
 			}
 			info.Streams = append(info.Streams, m)
 		default:
-			return nil, errors.New(fmt.Sprint("unknown section:", line))
+			return nil, fmt.Errorf("unknown section: %v", line)
 		}
 	}
 	return info, nil
-}
-
-type probeStamp time.Time
-
-var probeCache *cache.Cache = cache.New()
-
-func Probe(path string) (info *Info, err error) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return
-	}
-	stamp := fi.ModTime()
-	data, err := probeCache.Get(path, stamp, func() (cache.Data, cache.Stamp, error) {
-		info, err := probeUncached(path)
-		return info, stamp, err
-	})
-	info = data.(*Info)
-	return
 }
