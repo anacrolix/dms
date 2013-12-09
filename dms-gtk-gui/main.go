@@ -2,9 +2,8 @@ package main
 
 import (
 	"bitbucket.org/anacrolix/dms/dlna/dms"
-	"github.com/anacrolix/go-gtk/gtk"
 	"github.com/mattn/go-gtk/gdk"
-	"io"
+	"github.com/mattn/go-gtk/gtk"
 	"log"
 	"os"
 	"runtime"
@@ -15,33 +14,33 @@ func main() {
 	gtk.Init(&os.Args)
 	gdk.ThreadsInit()
 
-	window := gtk.Window(gtk.GTK_WINDOW_TOPLEVEL)
+	window := gtk.NewWindow(gtk.WINDOW_TOPLEVEL)
 	window.SetTitle("DMS GUI")
 	window.Connect("destroy", gtk.MainQuit)
 
-	vbox := gtk.VBox(false, 0)
+	vbox := gtk.NewVBox(false, 0)
 	window.Add(vbox)
 
-	hbox := gtk.HBox(false, 0)
+	hbox := gtk.NewHBox(false, 0)
 	vbox.PackStart(hbox, false, true, 0)
 
-	hbox.PackStart(gtk.Label("Shared directory: "), false, true, 0)
+	hbox.PackStart(gtk.NewLabel("Shared directory: "), false, true, 0)
 
-	dialog := gtk.FileChooserDialog(
-		"Select directory to share", window, gtk.GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
-		gtk.GTK_STOCK_CANCEL, gtk.GTK_RESPONSE_CANCEL,
-		gtk.GTK_STOCK_OK, gtk.GTK_RESPONSE_ACCEPT)
+	dialog := gtk.NewFileChooserDialog(
+		"Select directory to share", window, gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+		gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+		gtk.STOCK_OK, gtk.RESPONSE_ACCEPT)
 
-	button := gtk.FileChooserButtonWithDialog(dialog)
+	button := gtk.NewFileChooserButtonWithDialog(dialog)
 	hbox.Add(button)
 
-	logView := gtk.TextView()
+	logView := gtk.NewTextView()
 	logView.SetEditable(false)
 	logView.ModifyFontEasy("monospace")
-	logView.SetWrapMode(gtk.GTK_WRAP_WORD_CHAR)
-	logViewScroller := gtk.ScrolledWindow(nil, nil)
+	logView.SetWrapMode(gtk.WRAP_WORD_CHAR)
+	logViewScroller := gtk.NewScrolledWindow(nil, nil)
 	logViewScroller.Add(logView)
-	logViewScroller.SetPolicy(gtk.GTK_POLICY_AUTOMATIC, gtk.GTK_POLICY_ALWAYS)
+	logViewScroller.SetPolicy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
 	vbox.PackEnd(logViewScroller, true, true, 0)
 
 	getPath := func() string {
@@ -59,7 +58,7 @@ func main() {
 	}
 
 	window.ShowAll()
-	if dialog.Run() != gtk.GTK_RESPONSE_ACCEPT {
+	if dialog.Run() != gtk.RESPONSE_ACCEPT {
 		return
 	}
 	go func() {
