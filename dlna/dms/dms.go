@@ -150,6 +150,14 @@ type Cache interface {
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
+type DummyFFProbeCache struct{}
+
+func (DummyFFProbeCache) Set(interface{}, interface{}) {}
+
+func (DummyFFProbeCache) Get(interface{}) (interface{}, bool) {
+	return nil, false
+}
+
 type FFprobeCacheItem struct {
 	Key   ffmpegInfoCacheKey
 	Value *ffmpeg.Info
@@ -770,6 +778,21 @@ func (server *Server) initMux(mux *http.ServeMux) {
 func (srv *Server) Serve() (err error) {
 	if srv.FriendlyName == "" {
 		srv.FriendlyName = getDefaultFriendlyName()
+	}
+	if srv.HTTPConn == nil {
+		srv.HTTPConn, err = net.Listen("tcp", "")
+		if err != nil {
+			return
+		}
+	}
+	if srv.Interfaces == nil {
+		srv.Interfaces, err = net.Interfaces()
+		if err != nil {
+			log.Print(err)
+		}
+	}
+	if srv.FFProbeCache == nil {
+		srv.FFProbeCache = DummyFFProbeCache{}
 	}
 	srv.httpServeMux = http.NewServeMux()
 	srv.rootDeviceUUID = makeDeviceUuid(srv.FriendlyName)
