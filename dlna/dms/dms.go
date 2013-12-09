@@ -486,6 +486,10 @@ func (me *Server) objectIdPath(oid string) (path string, err error) {
 
 func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host, userAgent string) (map[string]string, *upnp.Error) {
 	switch sa.Action {
+	case "GetSystemUpdateID":
+		return map[string]string{
+			"Id": fmt.Sprintf("%d", uint32(os.Getpid())),
+		}, nil
 	case "GetSortCapabilities":
 		return map[string]string{
 			"SortCaps": "dc:title",
