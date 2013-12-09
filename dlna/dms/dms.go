@@ -78,7 +78,7 @@ func (me *Server) httpPort() int {
 	return me.HTTPConn.Addr().(*net.TCPAddr).Port
 }
 
-func (me *Server) serveHTTP() {
+func (me *Server) serveHTTP() error {
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Ext", "")
@@ -88,9 +88,9 @@ func (me *Server) serveHTTP() {
 	}
 	err := srv.Serve(me.HTTPConn)
 	if me.closed {
-		return
+		return nil
 	}
-	log.Fatalf("%#v", err)
+	return err
 }
 
 func (me *Server) doSSDP() error {
@@ -792,8 +792,10 @@ func (srv *Server) Serve() (err error) {
 	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
 	log.Println("HTTP srv on", srv.HTTPConn.Addr())
 	srv.initMux(srv.httpServeMux)
-	go srv.serveHTTP()
-	return srv.doSSDP()
+	go func() {
+		log.Print(srv.doSSDP())
+	}()
+	return srv.serveHTTP()
 }
 
 func (srv *Server) Close() error {
