@@ -47,43 +47,22 @@ func main() {
 		return button.GetFilename()
 	}
 
-	appendToLog := func(text string) {
-		var endIter gtk.GtkTextIter
-		gdk.ThreadsEnter()
-		logBuffer := logView.GetBuffer()
-		logBuffer.GetEndIter(&endIter)
-		logBuffer.Insert(&endIter, text)
-		logView.ScrollToIter(&endIter, 0, false, 0, 0)
-		gdk.ThreadsLeave()
-	}
-
 	window.ShowAll()
 	if dialog.Run() != gtk.RESPONSE_ACCEPT {
 		return
 	}
 	go func() {
-		logReader, logWriter := io.Pipe()
-		go func() {
-			var buf [128]byte
-			for {
-				n, err := logReader.Read(buf[:])
-				appendToLog(string(buf[:n]))
-				if err != nil {
-					panic(err)
-				}
-			}
-		}()
-		dmsLogger := log.New(logWriter, "", 0)
-		log.SetOutput(logWriter)
-		dmsServer, err := dms.New(getPath(), dmsLogger)
-		if err != nil {
+		dmsServer := dms.Server{
+			RootObjectPath: getPath(),
+		}
+		if err := dmsServer.Serve(); err != nil {
 			log.Fatalln(err)
 		}
 		defer dmsServer.Close()
 		runtime.LockOSThread()
 		gdk.ThreadsEnter()
 		button.Connect("selection-changed", func() {
-			dmsServer.SetRootPath(getPath())
+			dmsServer.RootObjectPath = getPath()
 		})
 		gdk.ThreadsLeave()
 		runtime.UnlockOSThread()
