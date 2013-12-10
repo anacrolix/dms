@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -150,21 +151,29 @@ func saveFFprobeCache(cache *fFprobeCache, path string) error {
 	cache.Lock()
 	items := cache.c.Items()
 	cache.Unlock()
-	if len(items) == 0 {
-		return nil
-	}
 	f, err := ioutil.TempFile(filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return err
 	}
 	enc := json.NewEncoder(f)
 	err = enc.Encode(items)
+	f.Close()
 	if err != nil {
 		os.Remove(f.Name())
 		return err
 	}
-	err = os.Rename(f.Name(), path)
-	if err != nil {
+	if runtime.GOOS == "windows" {
+		err = os.Remove(path)
+		if err == os.ErrNotExist {
+			err = nil
+		}
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err == nil {
+		log.Printf("saved cache with %d items", len(items))
+	} else {
 		os.Remove(f.Name())
 	}
 	return err
