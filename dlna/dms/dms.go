@@ -299,6 +299,7 @@ func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
 	value, ok := srv.FFProbeCache.Get(key)
 	if !ok {
 		info, err = ffmpeg.Probe(path)
+		err = suppressFFmpegProbeDataErrors(err)
 		srv.FFProbeCache.Set(key, info)
 		return
 	}
