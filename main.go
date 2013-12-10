@@ -111,8 +111,9 @@ func main() {
 		FFProbeCache:   cache,
 	}
 	go func() {
-		err := dmsServer.Serve()
-		log.Fatal(err)
+		if err := dmsServer.Serve(); err != nil {
+			log.Fatal(err)
+		}
 	}()
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt)

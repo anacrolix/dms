@@ -20,6 +20,7 @@ const (
 	AddrString = "239.255.255.250:1900"
 	rootDevice = "upnp:rootdevice"
 	aliveNTS   = "ssdp:alive"
+	byebyeNTS  = "ssdp:byebye"
 )
 
 var (
@@ -86,6 +87,7 @@ type Server struct {
 	Location       func(net.IP) string
 	UUID           string
 	NotifyInterval uint
+	closed         chan struct{}
 }
 
 func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
@@ -107,19 +109,28 @@ func (me *Server) serve() {
 	for {
 		b := make([]byte, me.Interface.MTU)
 		n, addr, err := me.conn.ReadFromUDP(b)
+		select {
+		case <-me.closed:
+			return
+		default:
+		}
 		if err != nil {
-			panic(err)
+			log.Print(err)
+			break
 		}
 		go me.handle(b[:n], addr)
 	}
 }
 
 func (me *Server) Init() (err error) {
+	me.closed = make(chan struct{})
 	me.conn, err = makeConn(me.Interface)
 	return
 }
 
 func (me *Server) Close() {
+	close(me.closed)
+	me.sendByeBye()
 	me.conn.Close()
 }
 
@@ -140,11 +151,14 @@ func (me *Server) Serve() (err error) {
 				}
 				panic(fmt.Sprint("unexpected addr type:", addr))
 			}()
-			me.notifyAll(ip, aliveNTS)
+			extraHdrs := [][2]string{
+				{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2)},
+				{"LOCATION", me.Location(ip)},
+			}
+			me.notifyAll(aliveNTS, extraHdrs)
 		}
 		time.Sleep(time.Duration(me.NotifyInterval) * time.Second)
 	}
-	panic("unreachable")
 }
 
 func (me *Server) usnFromTarget(target string) string {
@@ -154,11 +168,9 @@ func (me *Server) usnFromTarget(target string) string {
 	return me.UUID + "::" + target
 }
 
-func (me *Server) makeNotifyMessage(location, target, nts string) []byte {
+func (me *Server) makeNotifyMessage(target, nts string, extraHdrs [][2]string) []byte {
 	lines := [...][2]string{
 		{"HOST", AddrString},
-		{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2)},
-		{"LOCATION", location},
 		{"NT", target},
 		{"NTS", nts},
 		{"SERVER", me.Server},
@@ -166,15 +178,20 @@ func (me *Server) makeNotifyMessage(location, target, nts string) []byte {
 	}
 	buf := &bytes.Buffer{}
 	fmt.Fprint(buf, "NOTIFY * HTTP/1.1\r\n")
+	writeHdr := func(keyValue [2]string) {
+		fmt.Fprintf(buf, "%s: %s\r\n", keyValue[0], keyValue[1])
+	}
 	for _, pair := range lines {
-		fmt.Fprintf(buf, "%s: %s\r\n", pair[0], pair[1])
+		writeHdr(pair)
+	}
+	for _, pair := range extraHdrs {
+		writeHdr(pair)
 	}
 	fmt.Fprint(buf, "\r\n")
 	return buf.Bytes()
 }
 
-func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr) error {
-	time.Sleep(delay)
+func (me *Server) send(buf []byte, addr *net.UDPAddr) error {
 	n, err := me.conn.WriteToUDP(buf, addr)
 	if err != nil {
 		return err
@@ -185,15 +202,33 @@ func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr
 	return nil
 }
 
+func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr) error {
+	time.Sleep(delay)
+	select {
+	case <-me.closed:
+		return nil
+	default:
+	}
+	return me.send(buf, addr)
+}
+
 func (me *Server) log(args ...interface{}) {
 	args = append([]interface{}{me.Interface.Name + ":"}, args...)
 	log.Print(args...)
 }
 
-func (me *Server) notifyAll(ip net.IP, nts string) {
-	loc := me.Location(ip)
+func (me *Server) sendByeBye() {
 	for _, type_ := range me.allTypes() {
-		buf := me.makeNotifyMessage(loc, type_, nts)
+		buf := me.makeNotifyMessage(type_, byebyeNTS, nil)
+		if err := me.send(buf, NetAddr); err != nil {
+			log.Print(err)
+		}
+	}
+}
+
+func (me *Server) notifyAll(nts string, extraHdrs [][2]string) {
+	for _, type_ := range me.allTypes() {
+		buf := me.makeNotifyMessage(type_, nts, extraHdrs)
 		delay := time.Duration(rand.Int63n(int64(100 * time.Millisecond)))
 		go func() {
 			err := me.delayedSend(delay, buf, NetAddr)

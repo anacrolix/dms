@@ -87,10 +87,12 @@ func (me *Server) serveHTTP() error {
 		}),
 	}
 	err := srv.Serve(me.HTTPConn)
-	if me.closed {
+	select {
+	case <-me.closed:
 		return nil
+	default:
+		return err
 	}
-	return err
 }
 
 func (me *Server) doSSDP() error {
@@ -114,8 +116,16 @@ func (me *Server) doSSDP() error {
 				log.Println(if_.Name, err)
 			} else {
 				log.Println("started SSDP on", if_.Name)
-				if err := s.Serve(); err != nil {
-					log.Printf("%q: %q\n", if_.Name, err)
+				sStopped := make(chan struct{})
+				go func() {
+					if err := s.Serve(); err != nil {
+						log.Printf("%q: %q\n", if_.Name, err)
+					}
+					close(sStopped)
+				}()
+				select {
+				case <-me.closed:
+				case <-sStopped:
 				}
 				s.Close()
 			}
@@ -126,6 +136,7 @@ func (me *Server) doSSDP() error {
 		<-stopped
 		active--
 	}
+	close(me.ssdpStopped)
 	return errors.New("no interfaces remain")
 }
 
@@ -142,7 +153,8 @@ type Server struct {
 	rootDescXML    []byte
 	rootDeviceUUID string
 	FFProbeCache   Cache
-	closed         bool
+	closed         chan struct{}
+	ssdpStopped    chan struct{}
 }
 
 type Cache interface {
@@ -776,6 +788,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 }
 
 func (srv *Server) Serve() (err error) {
+	srv.closed = make(chan struct{})
 	if srv.FriendlyName == "" {
 		srv.FriendlyName = getDefaultFriendlyName()
 	}
@@ -815,15 +828,20 @@ func (srv *Server) Serve() (err error) {
 	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
 	log.Println("HTTP srv on", srv.HTTPConn.Addr())
 	srv.initMux(srv.httpServeMux)
+	srv.ssdpStopped = make(chan struct{})
 	go func() {
-		log.Print(srv.doSSDP())
+		if err := srv.doSSDP(); err != nil {
+			log.Print(err)
+		}
 	}()
 	return srv.serveHTTP()
 }
 
-func (srv *Server) Close() error {
-	srv.closed = true
-	return srv.HTTPConn.Close()
+func (srv *Server) Close() (err error) {
+	close(srv.closed)
+	err = srv.HTTPConn.Close()
+	<-srv.ssdpStopped
+	return
 }
 
 func didl_lite(chardata string) string {
