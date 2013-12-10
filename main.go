@@ -45,16 +45,7 @@ func (fc *fFprobeCache) Set(key interface{}, value interface{}) {
 func main() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
 
-	path := flag.String("path", func() (pwd string) {
-		pwd, err := os.Getwd()
-		if err != nil {
-			log.Print(err)
-		}
-		if pwd == "" {
-			pwd = "."
-		}
-		return
-	}(), "browse root path")
+	path := flag.String("path", "", "browse root path")
 
 	ifName := flag.String("ifname", "", "specific SSDP network interface")
 	httpAddr := flag.String("http", ":1338", "http server port")
