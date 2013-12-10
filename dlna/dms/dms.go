@@ -95,7 +95,7 @@ func (me *Server) serveHTTP() error {
 	}
 }
 
-func (me *Server) doSSDP() error {
+func (me *Server) doSSDP() {
 	active := 0
 	stopped := make(chan struct{})
 	for _, if_ := range me.Interfaces {
@@ -136,8 +136,6 @@ func (me *Server) doSSDP() error {
 		<-stopped
 		active--
 	}
-	close(me.ssdpStopped)
-	return errors.New("no interfaces remain")
 }
 
 var (
@@ -831,9 +829,8 @@ func (srv *Server) Serve() (err error) {
 	srv.initMux(srv.httpServeMux)
 	srv.ssdpStopped = make(chan struct{})
 	go func() {
-		if err := srv.doSSDP(); err != nil {
-			log.Print(err)
-		}
+		srv.doSSDP()
+		close(srv.ssdpStopped)
 	}()
 	return srv.serveHTTP()
 }
