@@ -717,6 +717,11 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			log.Println(err)
 		}
 		path := r.Form.Get("path")
+		path = filepath.Clean(path)
+		if !strings.HasPrefix(path, server.RootObjectPath) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		if r.Form.Get("transcode") == "" {
 			http.ServeFile(w, r, path)
 			return
