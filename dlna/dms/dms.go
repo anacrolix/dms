@@ -315,6 +315,7 @@ type ffmpegInfoCacheKey struct {
 
 // Can return nil info with nil err if an earlier Probe gave an error.
 func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
+	// We don't want relative paths in the cache.
 	path, err = filepath.Abs(path)
 	if err != nil {
 		return
