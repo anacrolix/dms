@@ -714,6 +714,14 @@ func getDefaultFriendlyName() string {
 	}())
 }
 
+func xmlMarshalOrPanic(value interface{}) []byte {
+	ret, err := xml.MarshalIndent(value, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return ret
+}
+
 func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("content-type", "text/html")
@@ -771,10 +779,10 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 		w.Header().Set("Ext", "")
 		w.Header().Set("Server", serverField)
-		soapResponseBody, httpResponseStatus := func() (interface{}, int) {
+		actionResponseXML, httpResponseStatus := func() ([]byte, int) {
 			argMap, err := server.contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host, r.UserAgent())
 			if err != nil {
-				return soap.NewFault("UPnPError", err), 500
+				return xmlMarshalOrPanic(soap.NewFault("UPnPError", err)), 500
 			}
 			args := make([]soap.Arg, 0, len(argMap))
 			for argName, value := range argMap {
@@ -783,25 +791,11 @@ func (server *Server) initMux(mux *http.ServeMux) {
 					Value:   value,
 				})
 			}
-			return soap.Action{
-				XMLName: xml.Name{
-					Space: soapAction.ServiceURN.String(),
-					Local: soapAction.Action + "Response",
-				},
-				Args: args,
-			}, 200
+			return []byte(fmt.Sprintf(`<u:%[1]sResponse xmlns:u="%[2]s">%[3]s</u:%[1]sResponse>`, soapAction.Action, soapAction.ServiceURN.String(), xmlMarshalOrPanic(args))), 200
 		}()
-		actionResponseXML, err := xml.MarshalIndent(soapResponseBody, "", "  ")
-		if err != nil {
-			panic(err)
-		}
-		body, err := xml.MarshalIndent(soap.NewEnvelope(actionResponseXML), "", "  ")
-		if err != nil {
-			panic(err)
-		}
-		body = append([]byte(xml.Header), body...)
+		bodyStr := fmt.Sprintf(`<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>%s</s:Body></s:Envelope>`, actionResponseXML)
 		w.WriteHeader(httpResponseStatus)
-		if _, err := w.Write(body); err != nil {
+		if _, err := w.Write([]byte(bodyStr)); err != nil {
 			panic(err)
 		}
 	})

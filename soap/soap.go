@@ -57,9 +57,12 @@ type Envelope struct {
 	Body          Body     `xml:"http://schemas.xmlsoap.org/soap/envelope/ Body"`
 }
 
+/* XML marshalling of nested namespaces is broken.
+
 func NewEnvelope(action []byte) Envelope {
 	return Envelope{
 		EncodingStyle: EncodingStyle,
 		Body:          Body{action},
 	}
 }
+*/
