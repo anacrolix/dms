@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -173,17 +172,44 @@ type FFprobeCacheItem struct {
 	Value *ffmpeg.Info
 }
 
-func (me *Server) childCount(path_ string) int {
-	fis, err := readDir(path_)
+// Represents a ContentDirectory object.
+type object struct {
+	Path   string  // The cleaned, absolute path for the object relative to the server.
+	Server *Server // The object's owning server.
+}
+
+// Returns the number of children this object has, such as for a container.
+func (me *object) ChildCount() int {
+	fis, err := me.readDir()
 	if err != nil {
 		log.Println(err)
-		return 0
 	}
-	ret := 0
-	for _, fi := range fis {
-		ret += len(me.fileEntries(fi, path_))
+	return len(fis)
+}
+
+// Returns the actual local filesystem path for the object.
+func (o *object) FilePath() string {
+	return filepath.Join(o.Server.RootObjectPath, filepath.FromSlash(o.Path))
+}
+
+// Returns the ObjectID for the object. This is used in various ContentDirectory actions.
+func (o *object) ID() string {
+	switch len(o.Path) {
+	case 1:
+		return "0"
+	default:
+		return o.Path
 	}
-	return ret
+}
+
+// Returns the objects parent ObjectID. Fortunately it can be deduced from the ObjectID (for now).
+func (o *object) ParentID() string {
+	switch len(o.Path) {
+	case 1:
+		return "-1"
+	default:
+		return path.Dir(o.Path)
+	}
 }
 
 // update the UPnP object fields from ffprobe data
@@ -289,6 +315,10 @@ type ffmpegInfoCacheKey struct {
 
 // Can return nil info with nil err if an earlier Probe gave an error.
 func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return
+	}
 	fi, err := os.Stat(path)
 	if err != nil {
 		return
@@ -308,19 +338,20 @@ func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
 // Turns the given entry and DMS host into a UPnP object.
 func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
-		ID:         me.pathObjectId(entry.Path),
+		ID:         entry.Object.ID(),
 		Restricted: 1,
-		ParentID:   entry.ParentID,
+		ParentID:   entry.Object.ParentID(),
 	}
 	if entry.FileInfo.IsDir() {
 		obj.Class = "object.container.storageFolder"
 		obj.Title = entry.FileInfo.Name()
 		return upnpav.Container{
 			Object:     obj,
-			ChildCount: me.childCount(entry.Path),
+			ChildCount: entry.Object.ChildCount(),
 		}
 	}
-	mimeType := MimeTypeByPath(entry.Path)
+	entryFilePath := entry.Object.FilePath()
+	mimeType := MimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
 	if !mimeTypeType.IsMedia() {
 		return nil
@@ -330,7 +361,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		nativeBitrate uint
 		duration      string
 	)
-	ffInfo, probeErr := me.ffmpegProbe(entry.Path)
+	ffInfo, probeErr := me.ffmpegProbe(entryFilePath)
 	switch probeErr {
 	case nil:
 		if ffInfo != nil {
@@ -338,7 +369,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		}
 	case ffmpeg.FfprobeUnavailableError:
 	default:
-		log.Printf("error probing %s: %s", entry.Path, probeErr)
+		log.Printf("error probing %s: %s", entryFilePath, probeErr)
 	}
 	if obj.Title == "" {
 		obj.Title = entry.FileInfo.Name()
@@ -353,7 +384,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 						Host:   host,
 						Path:   resPath,
 						RawQuery: url.Values{
-							"path": {entry.Path},
+							"path": {entry.Object.Path},
 						}.Encode(),
 					}).String(),
 					ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
@@ -391,7 +422,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 						Host:   host,
 						Path:   resPath,
 						RawQuery: url.Values{
-							"path":      {entry.Path},
+							"path":      {entry.Object.Path},
 							"transcode": {"t"},
 						}.Encode(),
 					}).String(),
@@ -417,19 +448,10 @@ func (mtt MimeTypeType) IsMedia() bool {
 	}
 }
 
-func (server *Server) fileEntries(fileInfo os.FileInfo, parentPath string) []cdsEntry {
-	return []cdsEntry{{
-		FileInfo: fileInfo,
-		Path:     path.Join(parentPath, fileInfo.Name()),
-		ParentID: server.pathObjectId(parentPath),
-	}}
-}
-
 // A content directory service entry contains sufficient information to determine how many entries to each actual file.
 type cdsEntry struct {
 	FileInfo os.FileInfo // file type. names would do but it's cheaper to do this upfront.
-	Path     string      // local filesystem path
-	ParentID string      // the entry's parent's ID
+	Object   object
 }
 
 type fileInfoSlice []os.FileInfo
@@ -456,20 +478,22 @@ func (me sortableFileInfoSlice) Swap(i, j int) {
 	me.fileInfoSlice[i], me.fileInfoSlice[j] = me.fileInfoSlice[j], me.fileInfoSlice[i]
 }
 
-func readDir(dirPath string) (fis fileInfoSlice, err error) {
-	dir, err := os.Open(dirPath)
+// TODO: Explain why this function exists rather than just calling os.(*File).Readdir.
+func (o *object) readDir() (fis fileInfoSlice, err error) {
+	dirPath := o.FilePath()
+	dirFile, err := os.Open(dirPath)
 	if err != nil {
 		return
 	}
-	defer dir.Close()
+	defer dirFile.Close()
 	var dirContent []string
-	dirContent, err = dir.Readdirnames(-1)
+	dirContent, err = dirFile.Readdirnames(-1)
 	if err != nil {
 		return
 	}
 	fis = make(fileInfoSlice, 0, len(dirContent))
 	for _, file := range dirContent {
-		fi, err := os.Stat(path.Join(dirPath, file))
+		fi, err := os.Stat(filepath.Join(dirPath, file))
 		if err != nil {
 			log.Print(err)
 			continue
@@ -479,11 +503,11 @@ func readDir(dirPath string) (fis fileInfoSlice, err error) {
 	return
 }
 
-func (me *Server) readContainer(path_, host, userAgent string) (ret []interface{}, err error) {
+func (me *Server) readContainer(o object, host, userAgent string) (ret []interface{}, err error) {
 	sfis := sortableFileInfoSlice{
 		FoldersLast: strings.Contains(userAgent, `AwoX/1.1`),
 	}
-	sfis.fileInfoSlice, err = readDir(path_)
+	sfis.fileInfoSlice, err = o.readDir()
 	if err != nil {
 		return
 	}
@@ -496,9 +520,7 @@ func (me *Server) readContainer(path_, host, userAgent string) (ret []interface{
 		ret := make(chan interface{})
 		go func() {
 			for _, fi := range sfis.fileInfoSlice {
-				for _, entry := range me.fileEntries(fi, path_) {
-					ret <- entry
-				}
+				ret <- cdsEntry{fi, object{path.Join(o.Path, fi.Name()), me}}
 			}
 			close(ret)
 		}()
@@ -519,26 +541,23 @@ type browse struct {
 	RequestedCount int
 }
 
-func (me *Server) pathObjectId(path string) string {
-	switch path {
-	case me.RootObjectPath:
-		return "0"
-	case filepath.Dir(me.RootObjectPath):
-		return "-1"
-	default:
-		return "1" + path
-	}
-}
-
-func (me *Server) objectIdPath(oid string) (path string, err error) {
+// Converts an ContentDirectory ObjectID to the corresponding object path.
+func (me *Server) objectIdPath(oid string) (path_ string, err error) {
 	switch {
 	case oid == "0":
-		path = me.RootObjectPath
-	case len(oid) > 0 && oid[0] == '1':
-		path = oid[1:]
+		path_ = "/"
+	case len(oid) > 0 && oid[0] == '/':
+		path_ = path.Clean(oid)
 	default:
-		err = errors.New("invalid ObjectID")
+		err = fmt.Errorf("invalid ObjectID: %q", oid)
 	}
+	return
+}
+
+// ContentDirectory object from ObjectID.
+func (me *Server) objectFromID(id string) (o object, err error) {
+	o.Server = me
+	o.Path, err = me.objectIdPath(id)
 	return
 }
 
@@ -557,7 +576,7 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
 			panic(err)
 		}
-		path, err := me.objectIdPath(browse.ObjectID)
+		obj, err := me.objectFromID(browse.ObjectID)
 		if err != nil {
 			return nil, &upnp.Error{
 				Code: upnpav.NoSuchObjectErrorCode,
@@ -566,7 +585,7 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 		}
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
-			objs, err := me.readContainer(path, host, userAgent)
+			objs, err := me.readContainer(obj, host, userAgent)
 			if err != nil {
 				return nil, &upnp.Error{
 					// readContainer can only fail due to bad ObjectID afaict
@@ -590,7 +609,7 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 				"UpdateID":       fmt.Sprintf("%d", uint32(time.Now().Unix())),
 			}, nil
 		case "BrowseMetadata":
-			fileInfo, err := os.Stat(path)
+			fileInfo, err := os.Stat(obj.FilePath())
 			if err != nil {
 				return nil, &upnp.Error{
 					Code: upnpav.NoSuchObjectErrorCode,
@@ -602,9 +621,8 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 				"NumberReturned": "1",
 				"Result": didl_lite(func() string {
 					buf, err := xml.MarshalIndent(me.entryObject(cdsEntry{
-						ParentID: me.pathObjectId(filepath.Dir(path)),
 						FileInfo: fileInfo,
-						Path:     path,
+						Object:   obj,
 					}, host), "", "  ")
 					if err != nil {
 						panic(err) // because aliens
@@ -714,19 +732,16 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			log.Println(err)
-		}
-		path := r.Form.Get("path")
-		path = filepath.Clean(path)
-		if !strings.HasPrefix(path, server.RootObjectPath) {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			// epic fizzle...
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		obj := object{path.Clean("/" + r.Form.Get("path")), server}
 		if r.Form.Get("transcode") == "" {
-			http.ServeFile(w, r, path)
+			http.ServeFile(w, r, obj.FilePath())
 			return
 		}
-		server.serveDLNATranscode(w, r, path)
+		server.serveDLNATranscode(w, r, obj.FilePath())
 	})
 	mux.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
