@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -26,7 +27,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -39,8 +39,22 @@ const (
 	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	contentDirectoryControlURL  = "/ctl/ContentDirectory"
-	transcodeMimeType           = "video/mpeg"
 )
+
+type TranscodeSpec struct {
+	MimeType        string
+	DLNAProfileName string
+	Transcode       func(path string, start, length time.Duration) (r io.ReadCloser, err error)
+}
+
+var transcodes = map[string]TranscodeSpec{
+	"t": {
+		MimeType:        "video/mpeg",
+		DLNAProfileName: "MPEG_PS_PAL",
+		Transcode:       misc.Transcode,
+	},
+	"vp8": {MimeType: "video/webm", Transcode: misc.VP8Transcode},
+}
 
 func makeDeviceUuid(unique string) string {
 	h := md5.New()
@@ -336,6 +350,31 @@ func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
 	return
 }
 
+func transcodeResources(host, path, resolution, duration string) (ret []upnpav.Resource) {
+	ret = make([]upnpav.Resource, 0, len(transcodes))
+	for k, v := range transcodes {
+		ret = append(ret, upnpav.Resource{
+			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", v.MimeType, dlna.ContentFeatures{
+				SupportTimeSeek: true,
+				Transcoded:      true,
+				ProfileName:     v.DLNAProfileName,
+			}.String()),
+			URL: (&url.URL{
+				Scheme: "http",
+				Host:   host,
+				Path:   resPath,
+				RawQuery: url.Values{
+					"path":      {path},
+					"transcode": {k},
+				}.Encode(),
+			}).String(),
+			Resolution: resolution,
+			Duration:   duration,
+		})
+	}
+	return
+}
+
 // Turns the given entry and DMS host into a UPnP object.
 func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
@@ -375,6 +414,21 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 	if obj.Title == "" {
 		obj.Title = entry.FileInfo.Name()
 	}
+	resolution := func() string {
+		if ffInfo != nil {
+			for _, strm := range ffInfo.Streams {
+				if strm["codec_type"] != "video" {
+					continue
+				}
+				width := strm["width"]
+				height := strm["height"]
+				if width != "" && height != "" {
+					return fmt.Sprintf("%sx%s", width, height)
+				}
+			}
+		}
+		return ""
+	}()
 	return upnpav.Item{
 		Object: obj,
 		Res: func() (ret []upnpav.Resource) {
@@ -391,45 +445,14 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 					ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
 						SupportRange: true,
 					}.String()),
-					Bitrate:  nativeBitrate,
-					Duration: duration,
-					Size:     uint64(entry.FileInfo.Size()),
-					Resolution: func() string {
-						if ffInfo != nil {
-							for _, strm := range ffInfo.Streams {
-								if strm["codec_type"] != "video" {
-									continue
-								}
-								width := strm["width"]
-								height := strm["height"]
-								if width != "" && height != "" {
-									return fmt.Sprintf("%sx%s", width, height)
-								}
-							}
-						}
-						return ""
-					}(),
+					Bitrate:    nativeBitrate,
+					Duration:   duration,
+					Size:       uint64(entry.FileInfo.Size()),
+					Resolution: resolution,
 				}
 			}())
 			if mimeTypeType == "video" {
-				ret = append(ret, upnpav.Resource{
-					ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", transcodeMimeType, dlna.ContentFeatures{
-						SupportTimeSeek: true,
-						Transcoded:      true,
-						ProfileName:     "MPEG_PS_PAL",
-					}.String()),
-					URL: (&url.URL{
-						Scheme: "http",
-						Host:   host,
-						Path:   resPath,
-						RawQuery: url.Values{
-							"path":      {entry.Object.Path},
-							"transcode": {"t"},
-						}.Encode(),
-					}).String(),
-					Resolution: "720x576",
-				},
-				)
+				ret = append(ret, transcodeResources(host, entry.Object.Path, resolution, duration)...)
 			}
 			return
 		}(),
@@ -647,51 +670,68 @@ func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byt
 	return nil, &upnp.InvalidActionError
 }
 
-func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string) {
+func parseDLNARangeHeader(val string) (ret dlna.NPTRange, err error) {
+	if !strings.HasPrefix(val, "npt=") {
+		err = errors.New("bad prefix")
+		return
+	}
+	ret, err = dlna.ParseNPTRange(val[len("npt="):])
+	if err != nil {
+		return
+	}
+	return
+}
+
+// Determines the time-based range to transcode, and sets the appropriate
+// headers. Returns !ok if there was an error and the caller should stop
+// handling the request.
+func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, ok bool) {
+	if len(hs[http.CanonicalHeaderKey(dlna.TimeSeekRangeDomain)]) == 0 {
+		ok = true
+		return
+	}
+	h := hs.Get(dlna.TimeSeekRangeDomain)
+	r, err := parseDLNARangeHeader(h)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Passing an exact NPT duration seems to cause trouble pass the "iono"
+	// (*) duration instead.
+	//
+	// TODO: Check that the request range can't already have /.
+	w.Header().Set(dlna.TimeSeekRangeDomain, h+"/*")
+	return
+}
+
+func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string, ts TranscodeSpec) {
 	w.Header().Set(dlna.TransferModeDomain, "Streaming")
-	w.Header().Set("content-type", "video/mpeg")
+	w.Header().Set("content-type", ts.MimeType)
 	w.Header().Set(dlna.ContentFeaturesDomain, (dlna.ContentFeatures{
 		Transcoded:      true,
 		SupportTimeSeek: true,
 	}).String())
-	dlnaRangeHeader := r.Header.Get(dlna.TimeSeekRangeDomain)
-	var nptStart, nptLength string
-	if dlnaRangeHeader != "" {
-		if !strings.HasPrefix(dlnaRangeHeader, "npt=") {
-			log.Println("bad range:", dlnaRangeHeader)
-			return
-		}
-		dlnaRange, err := dlna.ParseNPTRange(dlnaRangeHeader[len("npt="):])
-		if err != nil {
-			log.Println("bad range:", dlnaRangeHeader)
-			return
-		}
-		nptStart = dlna.FormatNPTTime(dlnaRange.Start)
-		if dlnaRange.End > 0 {
-			nptLength = dlna.FormatNPTTime(dlnaRange.End - dlnaRange.Start)
-		}
-		// passing an NPT duration seems to cause trouble
-		// so just pass the "iono" duration
-		w.Header().Set(dlna.TimeSeekRangeDomain, dlnaRangeHeader+"/*")
+	range_, ok := handleDLNARange(w, r.Header)
+	if !ok {
+		return
 	}
-	p, err := misc.Transcode(path_, nptStart, nptLength)
+	p, err := ts.Transcode(path_, range_.Start, range_.End-range_.Start)
 	if err != nil {
-		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer p.Close()
-	w.WriteHeader(206)
-	if n, err := io.Copy(w, p); err != nil {
-		// not an error if the peer closes the connection
-		func() {
-			if opErr, ok := err.(*net.OpError); ok {
-				if opErr.Err == syscall.EPIPE {
-					return
-				}
-			}
-			log.Println("after copying", n, "bytes:", err)
-		}()
-	}
+	// I recently switched this to returning 200 if no range is specified for
+	// pure UPnP clients. It's possible that DLNA clients will *always* expect
+	// 206.
+	w.WriteHeader(func() int {
+		if range_.Start == 0 && range_.End <= 0 {
+			return http.StatusOK
+		} else {
+			return http.StatusPartialContent
+		}
+	}())
+	io.Copy(w, p)
 }
 
 func init() {
@@ -722,6 +762,19 @@ func xmlMarshalOrPanic(value interface{}) []byte {
 	return ret
 }
 
+// TODO: Document the use of this for debugging.
+type mitmRespWriter struct {
+	http.ResponseWriter
+}
+
+func (me mitmRespWriter) WriteHeader(code int) {
+	fmt.Fprintln(os.Stderr, code)
+	for k, v := range me.Header() {
+		fmt.Fprintln(os.Stderr, k, v)
+	}
+	me.ResponseWriter.WriteHeader(code)
+}
+
 func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("content-type", "text/html")
@@ -746,11 +799,17 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			return
 		}
 		obj := object{path.Clean("/" + r.Form.Get("path")), server}
-		if r.Form.Get("transcode") == "" {
+		k := r.Form.Get("transcode")
+		if k == "" {
 			http.ServeFile(w, r, obj.FilePath())
 			return
 		}
-		server.serveDLNATranscode(w, r, obj.FilePath())
+		spec, ok := transcodes[k]
+		if !ok {
+			http.Error(w, fmt.Sprintf("bad transcode spec key: %s", k), http.StatusBadRequest)
+			return
+		}
+		server.serveDLNATranscode(w, r, obj.FilePath(), spec)
 	})
 	mux.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)

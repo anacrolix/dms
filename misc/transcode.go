@@ -8,8 +8,29 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"time"
 )
 
+// Invokes an external command and returns a reader from its stdout. The
+// command is waited on asynchronously.
+func transcodePipe(args []string) (r io.ReadCloser, err error) {
+	log.Println("transcode command:", args)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stderr = os.Stderr
+	r, err = cmd.StdoutPipe()
+	if err != nil {
+		return
+	}
+	err = cmd.Start()
+	if err != nil {
+		return
+	}
+	go cmd.Wait()
+	return
+}
+
+// Return a series of ffmpeg arguments that pick specific codecs for specific
+// streams. This requires use of the -map flag.
 func streamArgs(s map[string]string) (ret []string) {
 	defer func() {
 		if len(ret) != 0 {
@@ -40,20 +61,17 @@ func streamArgs(s map[string]string) (ret []string) {
 	return
 }
 
-func Transcode(path, ss, t string) (r io.ReadCloser, err error) {
+// Streams the desired file in the MPEG_PS_PAL DLNA profile.
+func Transcode(path string, start, length time.Duration) (r io.ReadCloser, err error) {
 	args := []string{
 		"ffmpeg",
 		"-threads", strconv.FormatInt(int64(runtime.NumCPU()), 10),
 		"-async", "1",
+		"-ss", FormatDurationSexagesimal(start),
 	}
-	if ss != "" {
+	if length >= 0 {
 		args = append(args, []string{
-			"-ss", ss,
-		}...)
-	}
-	if t != "" {
-		args = append(args, []string{
-			"-t", t,
+			"-t", FormatDurationSexagesimal(length),
 		}...)
 	}
 	args = append(args, []string{
@@ -67,21 +85,27 @@ func Transcode(path, ss, t string) (r io.ReadCloser, err error) {
 		args = append(args, streamArgs(s)...)
 	}
 	args = append(args, []string{"-f", "mpegts", "pipe:"}...)
-	log.Println("transcode command:", args)
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = os.Stderr
-	r, err = cmd.StdoutPipe()
-	if err != nil {
-		return
+	return transcodePipe(args)
+}
+
+// Returns a stream of Chromecast supported VP8.
+func VP8Transcode(path string, start, length time.Duration) (r io.ReadCloser, err error) {
+	args := []string{
+		"avconv",
+		"-threads", strconv.FormatInt(int64(runtime.NumCPU()), 10),
+		"-async", "1",
+		"-ss", FormatDurationSexagesimal(start),
 	}
-	err = cmd.Start()
-	if err != nil {
-		return
+	if length > 0 {
+		args = append(args, []string{
+			"-t", FormatDurationSexagesimal(length),
+		}...)
 	}
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			log.Println(err)
-		}
-	}()
-	return
+	args = append(args, []string{
+		"-i", path,
+		// "-deadline", "good",
+		// "-c:v", "libvpx", "-crf", "10",
+		"-f", "webm",
+		"pipe:"}...)
+	return transcodePipe(args)
 }
