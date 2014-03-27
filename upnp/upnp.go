@@ -2,21 +2,14 @@ package upnp
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
-var serviceURNRegexp *regexp.Regexp
-
-func init() {
-	var err error
-	serviceURNRegexp, err = regexp.Compile(`^urn:schemas-upnp-org:service:(\w+):(\d+)$`)
-	if err != nil {
-		panic(err)
-	}
-}
+var serviceURNRegexp *regexp.Regexp = regexp.MustCompile(`^urn:schemas-upnp-org:service:(\w+):(\d+)$`)
 
 type ServiceURN struct {
 	Type    string
@@ -27,20 +20,18 @@ func (me ServiceURN) String() string {
 	return fmt.Sprintf("urn:schemas-upnp-org:service:%s:%d", me.Type, me.Version)
 }
 
-func ParseServiceType(s string) (ret ServiceURN, ok bool) {
+func ParseServiceType(s string) (ret ServiceURN, err error) {
 	matches := serviceURNRegexp.FindStringSubmatch(s)
 	if matches == nil {
+		err = errors.New(s)
 		return
 	}
 	if len(matches) != 3 {
-		panic(matches)
-	}
-	ret.Type = matches[1]
-	var err error
-	ret.Version, err = strconv.ParseUint(matches[2], 0, 0)
-	if err != nil {
+		err = errors.New(s)
 		return
 	}
+	ret.Type = matches[1]
+	ret.Version, err = strconv.ParseUint(matches[2], 0, 0)
 	return
 }
 
@@ -59,8 +50,11 @@ func ParseActionHTTPHeader(s string) (ret SoapAction, ok bool) {
 		return
 	}
 	ret.Action = s[hashIndex+1:]
-	ret.ServiceURN, ok = ParseServiceType(s[:hashIndex])
-	ok = true
+	var err error
+	ret.ServiceURN, err = ParseServiceType(s[:hashIndex])
+	if err == nil {
+		ok = true
+	}
 	return
 }
 

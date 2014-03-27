@@ -3,7 +3,6 @@ package dms
 import (
 	"bitbucket.org/anacrolix/dms/dlna"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
-	"bitbucket.org/anacrolix/dms/futures"
 	"bitbucket.org/anacrolix/dms/misc"
 	"bitbucket.org/anacrolix/dms/soap"
 	"bitbucket.org/anacrolix/dms/ssdp"
@@ -24,8 +23,6 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
-	"runtime"
-	"sort"
 	"strings"
 	"time"
 )
@@ -38,7 +35,7 @@ const (
 	rootDescPath                = "/rootDesc.xml"
 	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
-	contentDirectoryControlURL  = "/ctl/ContentDirectory"
+	serviceControlURL           = "/ctl"
 )
 
 type transcodeSpec struct {
@@ -65,14 +62,35 @@ func makeDeviceUuid(unique string) string {
 	return fmt.Sprintf("uuid:%x-%x-%x-%x-%x", buf[:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
 }
 
-var services = []upnp.Service{
-	upnp.Service{
-		ServiceType: "urn:schemas-upnp-org:service:ContentDirectory:1",
-		ServiceId:   "urn:upnp-org:serviceId:ContentDirectory",
-		SCPDURL:     contentDirectorySCPDURL,
-		ControlURL:  contentDirectoryControlURL,
-		EventSubURL: contentDirectoryEventSubURL,
+// Groups the service definition with its XML description.
+type service struct {
+	upnp.Service
+	SCPD string
+}
+
+// Exposed UPnP AV services.
+var services = []*service{
+	{
+		Service: upnp.Service{
+			ServiceType: "urn:schemas-upnp-org:service:ContentDirectory:1",
+			ServiceId:   "urn:upnp-org:serviceId:ContentDirectory",
+			EventSubURL: contentDirectoryEventSubURL,
+		},
+		SCPD: contentDirectoryServiceDescription,
+	}, {
+		Service: upnp.Service{
+			ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:3",
+			ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+		},
+		SCPD: connectionManagerServiceDesc,
 	},
+}
+
+// The control URL for every service is the same. We're able to infer the desired service from the request headers.
+func init() {
+	for _, s := range services {
+		s.ControlURL = serviceControlURL
+	}
 }
 
 func devices() []string {
@@ -166,6 +184,13 @@ type Server struct {
 	FFProbeCache   Cache
 	closed         chan struct{}
 	ssdpStopped    chan struct{}
+    // The service SOAP handler keyed by service URN.
+	services       map[string]UPnPService
+}
+
+// UPnP SOAP service.
+type UPnPService interface {
+	Handle(action string, argsXML []byte, r *http.Request) (respArgs map[string]string, err *upnp.Error)
 }
 
 type Cache interface {
@@ -181,15 +206,17 @@ func (dummyFFProbeCache) Get(interface{}) (interface{}, bool) {
 	return nil, false
 }
 
-type ffprobeCacheItem struct {
+// Public definition so that external modules can persist cache contents.
+type FfprobeCacheItem struct {
 	Key   ffmpegInfoCacheKey
 	Value *ffmpeg.Info
 }
 
 // Represents a ContentDirectory object.
+// TODO: Move to the CDS source.
 type object struct {
-	Path   string  // The cleaned, absolute path for the object relative to the server.
-	Server *Server // The object's owning server.
+	Path           string // The cleaned, absolute path for the object relative to the server.
+	RootObjectPath string
 }
 
 // Returns the number of children this object has, such as for a container.
@@ -203,7 +230,7 @@ func (me *object) ChildCount() int {
 
 // Returns the actual local filesystem path for the object.
 func (o *object) FilePath() string {
-	return filepath.Join(o.Server.RootObjectPath, filepath.FromSlash(o.Path))
+	return filepath.Join(o.RootObjectPath, filepath.FromSlash(o.Path))
 }
 
 // Returns the ObjectID for the object. This is used in various ContentDirectory actions.
@@ -250,21 +277,6 @@ func itemExtra(item *upnpav.Object, info *ffmpeg.Info) {
 	for _, m := range info.Streams {
 		setFromTags(m)
 	}
-}
-
-// returns res attributes for the raw stream
-func (me *Server) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string) {
-	fmt.Sscan(info.Format["bit_rate"], &bitrate)
-	if d := info.Format["duration"]; d != "" && d != "N/A" {
-		var f float64
-		_, err := fmt.Sscan(info.Format["duration"], &f)
-		if err != nil {
-			log.Println(err)
-		} else {
-			duration = misc.FormatDurationSexagesimal(time.Duration(f * float64(time.Second)))
-		}
-	}
-	return
 }
 
 // Example: "video/mpeg"
@@ -327,29 +339,6 @@ type ffmpegInfoCacheKey struct {
 	ModTime int64
 }
 
-// Can return nil info with nil err if an earlier Probe gave an error.
-func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
-	// We don't want relative paths in the cache.
-	path, err = filepath.Abs(path)
-	if err != nil {
-		return
-	}
-	fi, err := os.Stat(path)
-	if err != nil {
-		return
-	}
-	key := ffmpegInfoCacheKey{path, fi.ModTime().UnixNano()}
-	value, ok := srv.FFProbeCache.Get(key)
-	if !ok {
-		info, err = ffmpeg.Probe(path)
-		err = suppressFFmpegProbeDataErrors(err)
-		srv.FFProbeCache.Set(key, info)
-		return
-	}
-	info = value.(*ffmpeg.Info)
-	return
-}
-
 func transcodeResources(host, path, resolution, duration string) (ret []upnpav.Resource) {
 	ret = make([]upnpav.Resource, 0, len(transcodes))
 	for k, v := range transcodes {
@@ -373,90 +362,6 @@ func transcodeResources(host, path, resolution, duration string) (ret []upnpav.R
 		})
 	}
 	return
-}
-
-// Turns the given entry and DMS host into a UPnP object.
-func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
-	obj := upnpav.Object{
-		ID:         entry.Object.ID(),
-		Restricted: 1,
-		ParentID:   entry.Object.ParentID(),
-	}
-	if entry.FileInfo.IsDir() {
-		obj.Class = "object.container.storageFolder"
-		obj.Title = entry.FileInfo.Name()
-		return upnpav.Container{
-			Object:     obj,
-			ChildCount: entry.Object.ChildCount(),
-		}
-	}
-	entryFilePath := entry.Object.FilePath()
-	mimeType := mimeTypeByPath(entryFilePath)
-	mimeTypeType := mimeType.Type()
-	if !mimeTypeType.IsMedia() {
-		return nil
-	}
-	obj.Class = "object.item." + string(mimeTypeType) + "Item"
-	var (
-		nativeBitrate uint
-		duration      string
-	)
-	ffInfo, probeErr := me.ffmpegProbe(entryFilePath)
-	switch probeErr {
-	case nil:
-		if ffInfo != nil {
-			nativeBitrate, duration = me.itemResExtra(ffInfo)
-		}
-	case ffmpeg.FfprobeUnavailableError:
-	default:
-		log.Printf("error probing %s: %s", entryFilePath, probeErr)
-	}
-	if obj.Title == "" {
-		obj.Title = entry.FileInfo.Name()
-	}
-	resolution := func() string {
-		if ffInfo != nil {
-			for _, strm := range ffInfo.Streams {
-				if strm["codec_type"] != "video" {
-					continue
-				}
-				width := strm["width"]
-				height := strm["height"]
-				if width != "" && height != "" {
-					return fmt.Sprintf("%sx%s", width, height)
-				}
-			}
-		}
-		return ""
-	}()
-	return upnpav.Item{
-		Object: obj,
-		Res: func() (ret []upnpav.Resource) {
-			ret = append(ret, func() upnpav.Resource {
-				return upnpav.Resource{
-					URL: (&url.URL{
-						Scheme: "http",
-						Host:   host,
-						Path:   resPath,
-						RawQuery: url.Values{
-							"path": {entry.Object.Path},
-						}.Encode(),
-					}).String(),
-					ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
-						SupportRange: true,
-					}.String()),
-					Bitrate:    nativeBitrate,
-					Duration:   duration,
-					Size:       uint64(entry.FileInfo.Size()),
-					Resolution: resolution,
-				}
-			}())
-			if mimeTypeType == "video" {
-				ret = append(ret, transcodeResources(host, entry.Object.Path, resolution, duration)...)
-			}
-			return
-		}(),
-	}
 }
 
 // The part of a MIME type before the '/'.
@@ -525,149 +430,6 @@ func (o *object) readDir() (fis fileInfoSlice, err error) {
 		fis = append(fis, fi)
 	}
 	return
-}
-
-func (me *Server) readContainer(o object, host, userAgent string) (ret []interface{}, err error) {
-	sfis := sortableFileInfoSlice{
-		FoldersLast: strings.Contains(userAgent, `AwoX/1.1`),
-	}
-	sfis.fileInfoSlice, err = o.readDir()
-	if err != nil {
-		return
-	}
-	sort.Sort(sfis)
-	pool := futures.NewExecutor(runtime.NumCPU())
-	defer pool.Shutdown()
-	for obj := range pool.Map(func(entry interface{}) interface{} {
-		return me.entryObject(entry.(cdsEntry), host)
-	}, func() <-chan interface{} {
-		ret := make(chan interface{})
-		go func() {
-			for _, fi := range sfis.fileInfoSlice {
-				ret <- cdsEntry{fi, object{path.Join(o.Path, fi.Name()), me}}
-			}
-			close(ret)
-		}()
-		return ret
-	}()) {
-		if obj != nil {
-			ret = append(ret, obj)
-		}
-	}
-	return
-}
-
-type browse struct {
-	ObjectID       string
-	BrowseFlag     string
-	Filter         string
-	StartingIndex  int
-	RequestedCount int
-}
-
-// Converts an ContentDirectory ObjectID to the corresponding object path.
-func (me *Server) objectIdPath(oid string) (path_ string, err error) {
-	switch {
-	case oid == "0":
-		path_ = "/"
-	case len(oid) > 0 && oid[0] == '/':
-		path_ = path.Clean(oid)
-	default:
-		err = fmt.Errorf("invalid ObjectID: %q", oid)
-	}
-	return
-}
-
-// ContentDirectory object from ObjectID.
-func (me *Server) objectFromID(id string) (o object, err error) {
-	o.Server = me
-	o.Path, err = me.objectIdPath(id)
-	return
-}
-
-func (me *Server) contentDirectoryResponseArgs(sa upnp.SoapAction, argsXML []byte, host, userAgent string) (map[string]string, *upnp.Error) {
-	switch sa.Action {
-	case "GetSystemUpdateID":
-		return map[string]string{
-			"Id": fmt.Sprintf("%d", uint32(os.Getpid())),
-		}, nil
-	case "GetSortCapabilities":
-		return map[string]string{
-			"SortCaps": "dc:title",
-		}, nil
-	case "Browse":
-		var browse browse
-		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
-			panic(err)
-		}
-		obj, err := me.objectFromID(browse.ObjectID)
-		if err != nil {
-			return nil, &upnp.Error{
-				Code: upnpav.NoSuchObjectErrorCode,
-				Desc: err.Error(),
-			}
-		}
-		switch browse.BrowseFlag {
-		case "BrowseDirectChildren":
-			objs, err := me.readContainer(obj, host, userAgent)
-			if err != nil {
-				return nil, &upnp.Error{
-					// readContainer can only fail due to bad ObjectID afaict
-					Code: upnpav.NoSuchObjectErrorCode,
-					Desc: err.Error(),
-				}
-			}
-			totalMatches := len(objs)
-			objs = objs[browse.StartingIndex:]
-			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
-				objs = objs[:browse.RequestedCount]
-			}
-			result, err := xml.MarshalIndent(objs, "", "  ")
-			if err != nil {
-				panic(err)
-			}
-			return map[string]string{
-				"TotalMatches":   fmt.Sprint(totalMatches),
-				"NumberReturned": fmt.Sprint(len(objs)),
-				"Result":         didl_lite(string(result)),
-				"UpdateID":       fmt.Sprintf("%d", uint32(time.Now().Unix())),
-			}, nil
-		case "BrowseMetadata":
-			fileInfo, err := os.Stat(obj.FilePath())
-			if err != nil {
-				return nil, &upnp.Error{
-					Code: upnpav.NoSuchObjectErrorCode,
-					Desc: err.Error(),
-				}
-			}
-			return map[string]string{
-				"TotalMatches":   "1",
-				"NumberReturned": "1",
-				"Result": didl_lite(func() string {
-					buf, err := xml.MarshalIndent(me.entryObject(cdsEntry{
-						FileInfo: fileInfo,
-						Object:   obj,
-					}, host), "", "  ")
-					if err != nil {
-						panic(err) // because aliens
-					}
-					return string(buf)
-				}()),
-				"UpdateID": fmt.Sprintf("%d", uint32(time.Now().Unix())),
-			}, nil
-		default:
-			return nil, &upnp.Error{
-				Code: upnp.ArgumentValueInvalidErrorCode,
-				Desc: fmt.Sprint("unhandled browse flag:", browse.BrowseFlag),
-			}
-		}
-	case "GetSearchCapabilities":
-		return map[string]string{
-			"SearchCaps": "",
-		}, nil
-	}
-	log.Println("unhandled content directory action:", sa.Action)
-	return nil, &upnp.InvalidActionError
 }
 
 func parseDLNARangeHeader(val string) (ret dlna.NPTRange, err error) {
@@ -775,6 +537,80 @@ func (me mitmRespWriter) WriteHeader(code int) {
 	me.ResponseWriter.WriteHeader(code)
 }
 
+// Set the SCPD serve paths.
+func init() {
+	for _, s := range services {
+		p := path.Join("/scpd", s.ServiceId)
+		s.SCPDURL = p
+	}
+}
+
+// Install handlers to serve SCPD for each UPnP service.
+func handleSCPDs(mux *http.ServeMux) {
+	for _, s := range services {
+		mux.HandleFunc(s.SCPDURL, func(serviceDesc string) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-type", `text/xml; charset="utf-8"`)
+				http.ServeContent(w, r, ".xml", startTime, bytes.NewReader([]byte(serviceDesc)))
+			}
+		}(s.SCPD))
+	}
+}
+
+// Marshal SOAP response arguments into a response XML snippet.
+func marshalSOAPResponse(sa upnp.SoapAction, args map[string]string) []byte {
+	soapArgs := make([]soap.Arg, 0, len(args))
+	for argName, value := range args {
+		soapArgs = append(soapArgs, soap.Arg{
+			XMLName: xml.Name{Local: argName},
+			Value:   value,
+		})
+	}
+	return []byte(fmt.Sprintf(`<u:%[1]sResponse xmlns:u="%[2]s">%[3]s</u:%[1]sResponse>`, sa.Action, sa.ServiceURN.String(), xmlMarshalOrPanic(soapArgs)))
+}
+
+// Handle a SOAP request and return the response arguments or UPnP error.
+func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte, r *http.Request) (map[string]string, *upnp.Error) {
+	service, ok := me.services[sa.Type]
+	if !ok {
+		// TODO: What's the invalid service error?!
+		return nil, &upnp.InvalidActionError
+	}
+	return service.Handle(sa.Action, actionRequestXML, r)
+}
+
+// Handle a service control HTTP request.
+func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) {
+	soapActionString := r.Header.Get("SOAPACTION")
+	soapAction, ok := upnp.ParseActionHTTPHeader(soapActionString)
+	if !ok {
+		http.Error(w, fmt.Sprintf("invalid soapaction: %#v", soapActionString), http.StatusBadRequest)
+		return
+	}
+	var env soap.Envelope
+	if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	//AwoX/1.1 UPnP/1.0 DLNADOC/1.50
+	//log.Println(r.UserAgent())
+	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
+	w.Header().Set("Ext", "")
+	w.Header().Set("Server", serverField)
+	soapRespXML, code := func() ([]byte, int) {
+		respArgs, err := me.soapActionResponse(soapAction, env.Body.Action, r)
+		if err != nil {
+			return xmlMarshalOrPanic(soap.NewFault("UPnPError", err)), 500
+		}
+		return marshalSOAPResponse(soapAction, respArgs), 200
+	}()
+	bodyStr := fmt.Sprintf(`<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>%s</s:Body></s:Envelope>`, soapRespXML)
+	w.WriteHeader(code)
+	if _, err := w.Write([]byte(bodyStr)); err != nil {
+		panic(err)
+	}
+}
+
 func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("content-type", "text/html")
@@ -798,7 +634,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		obj := object{path.Clean("/" + r.Form.Get("path")), server}
+		obj := object{path.Clean("/" + r.Form.Get("path")), server.RootObjectPath}
 		k := r.Form.Get("transcode")
 		if k == "" {
 			http.ServeFile(w, r, obj.FilePath())
@@ -817,50 +653,22 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		w.Header().Set("server", serverField)
 		w.Write(server.rootDescXML)
 	})
-	mux.HandleFunc(contentDirectorySCPDURL, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
-		http.ServeContent(w, r, ".xml", startTime, bytes.NewReader([]byte(contentDirectoryServiceDescription)))
-	})
-	mux.HandleFunc(contentDirectoryControlURL, func(w http.ResponseWriter, r *http.Request) {
-		soapActionString := r.Header.Get("SOAPACTION")
-		soapAction, ok := upnp.ParseActionHTTPHeader(soapActionString)
-		if !ok {
-			http.Error(w, fmt.Sprintf("invalid soapaction: %#v", soapActionString), http.StatusBadRequest)
-			return
-		}
-		var env soap.Envelope
-		if err := xml.NewDecoder(r.Body).Decode(&env); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		//AwoX/1.1 UPnP/1.0 DLNADOC/1.50
-		//log.Println(r.UserAgent())
-		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
-		w.Header().Set("Ext", "")
-		w.Header().Set("Server", serverField)
-		actionResponseXML, httpResponseStatus := func() ([]byte, int) {
-			argMap, err := server.contentDirectoryResponseArgs(soapAction, env.Body.Action, r.Host, r.UserAgent())
-			if err != nil {
-				return xmlMarshalOrPanic(soap.NewFault("UPnPError", err)), 500
-			}
-			args := make([]soap.Arg, 0, len(argMap))
-			for argName, value := range argMap {
-				args = append(args, soap.Arg{
-					XMLName: xml.Name{Local: argName},
-					Value:   value,
-				})
-			}
-			return []byte(fmt.Sprintf(`<u:%[1]sResponse xmlns:u="%[2]s">%[3]s</u:%[1]sResponse>`, soapAction.Action, soapAction.ServiceURN.String(), xmlMarshalOrPanic(args))), 200
-		}()
-		bodyStr := fmt.Sprintf(`<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>%s</s:Body></s:Envelope>`, actionResponseXML)
-		w.WriteHeader(httpResponseStatus)
-		if _, err := w.Write([]byte(bodyStr)); err != nil {
-			panic(err)
-		}
-	})
+	handleSCPDs(mux)
+	mux.HandleFunc(serviceControlURL, server.serviceControlHandler)
+}
+
+func (s *Server) initServices() {
+	urn, err := upnp.ParseServiceType(services[0].ServiceType)
+	if err != nil {
+		panic(err)
+	}
+	s.services = map[string]UPnPService{
+		urn.Type: &contentDirectoryService{s},
+	}
 }
 
 func (srv *Server) Serve() (err error) {
+	srv.initServices()
 	srv.closed = make(chan struct{})
 	if srv.FriendlyName == "" {
 		srv.FriendlyName = getDefaultFriendlyName()
@@ -891,7 +699,12 @@ func (srv *Server) Serve() (err error) {
 				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
 				ModelName:    rootDeviceModelName,
 				UDN:          srv.rootDeviceUUID,
-				ServiceList:  services,
+				ServiceList: func() (ss []upnp.Service) {
+					for _, s := range services {
+						ss = append(ss, s.Service)
+					}
+					return
+				}(),
 			},
 		},
 		" ", "  ")

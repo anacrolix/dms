@@ -126,7 +126,7 @@ func loadFFprobeCache(cache *fFprobeCache, path string) error {
 	}
 	defer f.Close()
 	dec := json.NewDecoder(f)
-	var items []dms.FFprobeCacheItem
+	var items []dms.FfprobeCacheItem
 	err = dec.Decode(&items)
 	if err != nil {
 		return err
