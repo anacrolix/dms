@@ -1,7 +1,7 @@
 package main
 
 import (
-	"../dlna/dms"
+	"bitbucket.org/anacrolix/dms/dlna/dms"
 	"flag"
 	"fmt"
 )
