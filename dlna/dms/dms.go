@@ -41,19 +41,19 @@ const (
 	contentDirectoryControlURL  = "/ctl/ContentDirectory"
 )
 
-type TranscodeSpec struct {
-	MimeType        string
+type transcodeSpec struct {
+	mimeType        string
 	DLNAProfileName string
 	Transcode       func(path string, start, length time.Duration) (r io.ReadCloser, err error)
 }
 
-var transcodes = map[string]TranscodeSpec{
+var transcodes = map[string]transcodeSpec{
 	"t": {
-		MimeType:        "video/mpeg",
+		mimeType:        "video/mpeg",
 		DLNAProfileName: "MPEG_PS_PAL",
 		Transcode:       misc.Transcode,
 	},
-	"vp8": {MimeType: "video/webm", Transcode: misc.VP8Transcode},
+	"vp8": {mimeType: "video/webm", Transcode: misc.VP8Transcode},
 }
 
 func makeDeviceUuid(unique string) string {
@@ -173,15 +173,15 @@ type Cache interface {
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
-type DummyFFProbeCache struct{}
+type dummyFFProbeCache struct{}
 
-func (DummyFFProbeCache) Set(interface{}, interface{}) {}
+func (dummyFFProbeCache) Set(interface{}, interface{}) {}
 
-func (DummyFFProbeCache) Get(interface{}) (interface{}, bool) {
+func (dummyFFProbeCache) Get(interface{}) (interface{}, bool) {
 	return nil, false
 }
 
-type FFprobeCacheItem struct {
+type ffprobeCacheItem struct {
 	Key   ffmpegInfoCacheKey
 	Value *ffmpeg.Info
 }
@@ -268,17 +268,17 @@ func (me *Server) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string
 }
 
 // Example: "video/mpeg"
-type MimeType string
+type mimeType string
 
 // Attempts to guess mime type by peeling off extensions, such as those given
 // to incomplete files.
-func mimeTypeByBaseName(name string) MimeType {
+func mimeTypeByBaseName(name string) mimeType {
 	for name != "" {
 		ext := strings.ToLower(path.Ext(name))
 		if ext == "" {
 			break
 		}
-		ret := MimeType(mime.TypeByExtension(ext))
+		ret := mimeType(mime.TypeByExtension(ext))
 		if ret.Type().IsMedia() {
 			return ret
 		}
@@ -296,7 +296,7 @@ func mimeTypeByBaseName(name string) MimeType {
 }
 
 // Used to determine the MIME-type for the given path
-func MimeTypeByPath(path_ string) (ret MimeType) {
+func mimeTypeByPath(path_ string) (ret mimeType) {
 	defer func() {
 		if ret == "video/x-msvideo" {
 			ret = "video/avi"
@@ -313,13 +313,13 @@ func MimeTypeByPath(path_ string) (ret MimeType) {
 	var data [512]byte
 	n, _ := file.Read(data[:])
 	file.Close()
-	ret = MimeType(http.DetectContentType(data[:n]))
+	ret = mimeType(http.DetectContentType(data[:n]))
 	return
 }
 
 // Returns the group "type", the part before the '/'.
-func (mt MimeType) Type() MimeTypeType {
-	return MimeTypeType(strings.SplitN(string(mt), "/", 2)[0])
+func (mt mimeType) Type() mimeTypeType {
+	return mimeTypeType(strings.SplitN(string(mt), "/", 2)[0])
 }
 
 type ffmpegInfoCacheKey struct {
@@ -354,7 +354,7 @@ func transcodeResources(host, path, resolution, duration string) (ret []upnpav.R
 	ret = make([]upnpav.Resource, 0, len(transcodes))
 	for k, v := range transcodes {
 		ret = append(ret, upnpav.Resource{
-			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", v.MimeType, dlna.ContentFeatures{
+			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", v.mimeType, dlna.ContentFeatures{
 				SupportTimeSeek: true,
 				Transcoded:      true,
 				ProfileName:     v.DLNAProfileName,
@@ -391,7 +391,7 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 		}
 	}
 	entryFilePath := entry.Object.FilePath()
-	mimeType := MimeTypeByPath(entryFilePath)
+	mimeType := mimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
 	if !mimeTypeType.IsMedia() {
 		return nil
@@ -460,10 +460,10 @@ func (me *Server) entryObject(entry cdsEntry, host string) interface{} {
 }
 
 // The part of a MIME type before the '/'.
-type MimeTypeType string
+type mimeTypeType string
 
 // Returns true if the type is typical media.
-func (mtt MimeTypeType) IsMedia() bool {
+func (mtt mimeTypeType) IsMedia() bool {
 	switch mtt {
 	case "video", "audio":
 		return true
@@ -704,9 +704,9 @@ func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, ok
 	return
 }
 
-func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string, ts TranscodeSpec) {
+func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string, ts transcodeSpec) {
 	w.Header().Set(dlna.TransferModeDomain, "Streaming")
-	w.Header().Set("content-type", ts.MimeType)
+	w.Header().Set("content-type", ts.mimeType)
 	w.Header().Set(dlna.ContentFeaturesDomain, (dlna.ContentFeatures{
 		Transcoded:      true,
 		SupportTimeSeek: true,
@@ -878,7 +878,7 @@ func (srv *Server) Serve() (err error) {
 		}
 	}
 	if srv.FFProbeCache == nil {
-		srv.FFProbeCache = DummyFFProbeCache{}
+		srv.FFProbeCache = dummyFFProbeCache{}
 	}
 	srv.httpServeMux = http.NewServeMux()
 	srv.rootDeviceUUID = makeDeviceUuid(srv.FriendlyName)
