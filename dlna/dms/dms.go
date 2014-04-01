@@ -77,12 +77,12 @@ var services = []*service{
 			EventSubURL: contentDirectoryEventSubURL,
 		},
 		SCPD: contentDirectoryServiceDescription,
-	}, {
-		Service: upnp.Service{
-			ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:3",
-			ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-		},
-		SCPD: connectionManagerServiceDesc,
+		// }, {
+		// 	Service: upnp.Service{
+		// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:3",
+		// 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+		// 	},
+		// 	SCPD: connectionManagerServiceDesc,
 	},
 }
 
