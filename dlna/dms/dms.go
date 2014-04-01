@@ -184,8 +184,8 @@ type Server struct {
 	FFProbeCache   Cache
 	closed         chan struct{}
 	ssdpStopped    chan struct{}
-    // The service SOAP handler keyed by service URN.
-	services       map[string]UPnPService
+	// The service SOAP handler keyed by service URN.
+	services map[string]UPnPService
 }
 
 // UPnP SOAP service.
@@ -626,6 +626,8 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		}
 	})
 	mux.HandleFunc(contentDirectoryEventSubURL, func(w http.ResponseWriter, r *http.Request) {
+		// Without handling this with StatusNotImplemented, IIRC VLC doesn't
+		// work correctly.
 		http.Error(w, "vlc sux", http.StatusNotImplemented)
 	})
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
