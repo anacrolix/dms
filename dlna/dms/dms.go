@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -32,6 +33,7 @@ const (
 	rootDeviceType              = "urn:schemas-upnp-org:device:MediaServer:1"
 	rootDeviceModelName         = "dms 1.0"
 	resPath                     = "/res"
+	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
 	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
@@ -112,9 +114,17 @@ func (me *Server) httpPort() int {
 func (me *Server) serveHTTP() error {
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if me.LogHeaders {
+				fmt.Fprintf(os.Stderr, "%s %s\r\n", r.Method, r.RequestURI)
+				r.Header.Write(os.Stderr)
+				fmt.Fprintln(os.Stderr)
+			}
 			w.Header().Set("Ext", "")
 			w.Header().Set("Server", serverField)
-			me.httpServeMux.ServeHTTP(w, r)
+			me.httpServeMux.ServeHTTP(&mitmRespWriter{
+				ResponseWriter: w,
+				logHeader:      me.LogHeaders,
+			}, r)
 		}),
 	}
 	err := srv.Serve(me.HTTPConn)
@@ -185,7 +195,8 @@ type Server struct {
 	closed         chan struct{}
 	ssdpStopped    chan struct{}
 	// The service SOAP handler keyed by service URN.
-	services map[string]UPnPService
+	services   map[string]UPnPService
+	LogHeaders bool
 }
 
 // UPnP SOAP service.
@@ -527,14 +538,32 @@ func xmlMarshalOrPanic(value interface{}) []byte {
 // TODO: Document the use of this for debugging.
 type mitmRespWriter struct {
 	http.ResponseWriter
+	loggedHeader bool
+	logHeader    bool
 }
 
-func (me mitmRespWriter) WriteHeader(code int) {
+func (me *mitmRespWriter) WriteHeader(code int) {
+	me.doLogHeader(code)
+	me.ResponseWriter.WriteHeader(code)
+}
+
+func (me *mitmRespWriter) doLogHeader(code int) {
+	if !me.logHeader {
+		return
+	}
 	fmt.Fprintln(os.Stderr, code)
 	for k, v := range me.Header() {
 		fmt.Fprintln(os.Stderr, k, v)
 	}
-	me.ResponseWriter.WriteHeader(code)
+	fmt.Fprintln(os.Stderr)
+	me.loggedHeader = true
+}
+
+func (me *mitmRespWriter) Write(b []byte) (int, error) {
+	if !me.loggedHeader {
+		me.doLogHeader(200)
+	}
+	return me.ResponseWriter.Write(b)
 }
 
 // Set the SCPD serve paths.
@@ -611,6 +640,22 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (s *Server) cdsObject(_path string) object {
+	return object{path.Clean("/" + _path), s.RootObjectPath}
+}
+
+func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
+	obj := me.cdsObject(r.URL.Query().Get("path"))
+	cmd := exec.Command("ffmpegthumbnailer", "-i", obj.FilePath(), "-o", "/dev/stdout", "-cpng")
+	// cmd.Stderr = os.Stderr
+	body, err := cmd.Output()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
+}
+
 func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("content-type", "text/html")
@@ -630,6 +675,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		// work correctly.
 		http.Error(w, "vlc sux", http.StatusNotImplemented)
 	})
+	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			// epic fizzle...

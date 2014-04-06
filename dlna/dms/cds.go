@@ -63,12 +63,23 @@ func (srv *contentDirectoryService) ffmpegProbe(path string) (info *ffmpeg.Info,
 	return
 }
 
-// Turns the given entry and DMS host into a UPnP object.
+// Turns the given entry and DMS host into a UPnP object. A nil object is
+// returned if the entry is not of interest.
 func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
 		ID:         entry.Object.ID(),
 		Restricted: 1,
 		ParentID:   entry.Object.ParentID(),
+		// The spec says icon is a URI. It might be possible just to use
+		// RequestURI here, and ditch the Host and Scheme?
+		Icon: (&url.URL{
+			Scheme: "http",
+			Host:   host,
+			Path:   iconPath,
+			RawQuery: url.Values{
+				"path": {entry.Object.Path},
+			}.Encode(),
+		}).String(),
 	}
 	if entry.FileInfo.IsDir() {
 		obj.Class = "object.container.storageFolder"

@@ -50,6 +50,7 @@ func main() {
 	ifName := flag.String("ifname", "", "specific SSDP network interface")
 	httpAddr := flag.String("http", ":1338", "http server port")
 	friendlyName := flag.String("friendlyName", "", "server friendly name")
+	logHeaders := flag.Bool("logHeaders", false, "log HTTP headers")
 	fFprobeCachePath := flag.String("fFprobeCachePath", func() (path string) {
 		_user, err := user.Current()
 		if err != nil {
@@ -101,6 +102,7 @@ func main() {
 		FriendlyName:   *friendlyName,
 		RootObjectPath: filepath.Clean(*path),
 		FFProbeCache:   cache,
+		LogHeaders:     *logHeaders,
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {
