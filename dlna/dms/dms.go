@@ -245,7 +245,7 @@ func (o *object) FilePath() string {
 }
 
 // Returns the ObjectID for the object. This is used in various ContentDirectory actions.
-func (o *object) ID() string {
+func (o object) ID() string {
 	switch len(o.Path) {
 	case 1:
 		return "0"
