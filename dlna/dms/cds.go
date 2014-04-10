@@ -94,6 +94,8 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 		}.Encode(),
 	}).String()
 	obj.Icon = iconURI
+	// TODO(anacrolix): This might not be necessary due to item res image
+	// element.
 	obj.AlbumArtURI = iconURI
 	obj.Class = "object.item." + string(mimeTypeType) + "Item"
 	var (
@@ -128,34 +130,46 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 		}
 		return ""
 	}()
-	return upnpav.Item{
+	item := upnpav.Item{
 		Object: obj,
-		Res: func() (ret []upnpav.Resource) {
-			ret = append(ret, func() upnpav.Resource {
-				return upnpav.Resource{
-					URL: (&url.URL{
-						Scheme: "http",
-						Host:   host,
-						Path:   resPath,
-						RawQuery: url.Values{
-							"path": {entry.Object.Path},
-						}.Encode(),
-					}).String(),
-					ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
-						SupportRange: true,
-					}.String()),
-					Bitrate:    nativeBitrate,
-					Duration:   duration,
-					Size:       uint64(entry.FileInfo.Size()),
-					Resolution: resolution,
-				}
-			}())
-			if mimeTypeType == "video" {
-				ret = append(ret, transcodeResources(host, entry.Object.Path, resolution, duration)...)
-			}
-			return
-		}(),
+		// Capacity: 1 for raw, 2 for transcode, 1 for icon.
+		Res: make([]upnpav.Resource, 0, 4),
 	}
+	item.Res = append(item.Res, upnpav.Resource{
+		URL: (&url.URL{
+			Scheme: "http",
+			Host:   host,
+			Path:   resPath,
+			RawQuery: url.Values{
+				"path": {entry.Object.Path},
+			}.Encode(),
+		}).String(),
+		ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
+			SupportRange: true,
+		}.String()),
+		Bitrate:    nativeBitrate,
+		Duration:   duration,
+		Size:       uint64(entry.FileInfo.Size()),
+		Resolution: resolution,
+	})
+	if mimeTypeType == "video" {
+		item.Res = append(item.Res, transcodeResources(host, entry.Object.Path, resolution, duration)...)
+	}
+	if mimeTypeType.IsMedia() {
+		item.Res = append(item.Res, upnpav.Resource{
+			URL: (&url.URL{
+				Scheme: "http",
+				Host:   host,
+				Path:   iconPath,
+				RawQuery: url.Values{
+					"path": {entry.Object.Path},
+					"c":    {"jpeg"},
+				}.Encode(),
+			}).String(),
+			ProtocolInfo: "http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN",
+		})
+	}
+	return item
 }
 
 func (me *contentDirectoryService) readContainer(o object, host, userAgent string) (ret []interface{}, err error) {

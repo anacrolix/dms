@@ -646,7 +646,11 @@ func (s *Server) cdsObject(_path string) object {
 
 func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	obj := me.cdsObject(r.URL.Query().Get("path"))
-	cmd := exec.Command("ffmpegthumbnailer", "-i", obj.FilePath(), "-o", "/dev/stdout", "-cpng")
+	c := r.URL.Query().Get("c")
+	if c == "" {
+		c = "png"
+	}
+	cmd := exec.Command("ffmpegthumbnailer", "-i", obj.FilePath(), "-o", "/dev/stdout", "-c"+c)
 	// cmd.Stderr = os.Stderr
 	body, err := cmd.Output()
 	if err != nil {
