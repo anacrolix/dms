@@ -56,12 +56,15 @@ func readLine(r *bufio.Reader) (line string, err error) {
 
 var ffprobePath string
 
-func isNotFoundExecError(err error) bool {
+func isExecErrNotFound(err error) bool {
+	if err == exec.ErrNotFound {
+		return true
+	}
 	execErr, ok := err.(*exec.Error)
 	if !ok {
 		return false
 	}
-	return execErr == exec.ErrNotFound
+	return execErr.Err == exec.ErrNotFound
 }
 
 func init() {
@@ -70,14 +73,14 @@ func init() {
 	if err == nil {
 		return
 	}
-	if !isNotFoundExecError(err) {
+	if !isExecErrNotFound(err) {
 		log.Print(err)
 	}
 	ffprobePath, err = exec.LookPath("avprobe")
 	if err == nil {
 		return
 	}
-	if isNotFoundExecError(err) {
+	if isExecErrNotFound(err) {
 		log.Print("ffprobe and avprobe not found in $PATH")
 		return
 	}
