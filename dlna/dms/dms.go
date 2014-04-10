@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -223,47 +222,6 @@ type FfprobeCacheItem struct {
 	Value *ffmpeg.Info
 }
 
-// Represents a ContentDirectory object.
-// TODO: Move to the CDS source.
-type object struct {
-	Path           string // The cleaned, absolute path for the object relative to the server.
-	RootObjectPath string
-}
-
-// Returns the number of children this object has, such as for a container.
-func (me *object) ChildCount() int {
-	fis, err := me.readDir()
-	if err != nil {
-		log.Println(err)
-	}
-	return len(fis)
-}
-
-// Returns the actual local filesystem path for the object.
-func (o *object) FilePath() string {
-	return filepath.Join(o.RootObjectPath, filepath.FromSlash(o.Path))
-}
-
-// Returns the ObjectID for the object. This is used in various ContentDirectory actions.
-func (o object) ID() string {
-	switch len(o.Path) {
-	case 1:
-		return "0"
-	default:
-		return o.Path
-	}
-}
-
-// Returns the objects parent ObjectID. Fortunately it can be deduced from the ObjectID (for now).
-func (o *object) ParentID() string {
-	switch len(o.Path) {
-	case 1:
-		return "-1"
-	default:
-		return path.Dir(o.Path)
-	}
-}
-
 // update the UPnP object fields from ffprobe data
 // priority is given the format section, and then the streams sequentially
 func itemExtra(item *upnpav.Object, info *ffmpeg.Info) {
@@ -386,61 +344,6 @@ func (mtt mimeTypeType) IsMedia() bool {
 	default:
 		return false
 	}
-}
-
-// A content directory service entry contains sufficient information to determine how many entries to each actual file.
-type cdsEntry struct {
-	FileInfo os.FileInfo // file type. names would do but it's cheaper to do this upfront.
-	Object   object
-}
-
-type fileInfoSlice []os.FileInfo
-type sortableFileInfoSlice struct {
-	fileInfoSlice
-	FoldersLast bool
-}
-
-func (me sortableFileInfoSlice) Len() int {
-	return len(me.fileInfoSlice)
-}
-
-func (me sortableFileInfoSlice) Less(i, j int) bool {
-	if me.fileInfoSlice[i].IsDir() && !me.fileInfoSlice[j].IsDir() {
-		return !me.FoldersLast
-	}
-	if !me.fileInfoSlice[i].IsDir() && me.fileInfoSlice[j].IsDir() {
-		return me.FoldersLast
-	}
-	return strings.ToLower(me.fileInfoSlice[i].Name()) < strings.ToLower(me.fileInfoSlice[j].Name())
-}
-
-func (me sortableFileInfoSlice) Swap(i, j int) {
-	me.fileInfoSlice[i], me.fileInfoSlice[j] = me.fileInfoSlice[j], me.fileInfoSlice[i]
-}
-
-// TODO: Explain why this function exists rather than just calling os.(*File).Readdir.
-func (o *object) readDir() (fis fileInfoSlice, err error) {
-	dirPath := o.FilePath()
-	dirFile, err := os.Open(dirPath)
-	if err != nil {
-		return
-	}
-	defer dirFile.Close()
-	var dirContent []string
-	dirContent, err = dirFile.Readdirnames(-1)
-	if err != nil {
-		return
-	}
-	fis = make(fileInfoSlice, 0, len(dirContent))
-	for _, file := range dirContent {
-		fi, err := os.Stat(filepath.Join(dirPath, file))
-		if err != nil {
-			log.Print(err)
-			continue
-		}
-		fis = append(fis, fi)
-	}
-	return
 }
 
 func parseDLNARangeHeader(val string) (ret dlna.NPTRange, err error) {
@@ -681,13 +584,8 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			// epic fizzle...
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		obj := object{path.Clean("/" + r.Form.Get("path")), server.RootObjectPath}
-		k := r.Form.Get("transcode")
+		obj := server.cdsObject(r.URL.Query().Get("path"))
+		k := r.URL.Query().Get("transcode")
 		if k == "" {
 			http.ServeFile(w, r, obj.FilePath())
 			return

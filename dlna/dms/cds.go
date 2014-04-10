@@ -67,19 +67,19 @@ func (srv *contentDirectoryService) ffmpegProbe(path string) (info *ffmpeg.Info,
 // returned if the entry is not of interest.
 func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) interface{} {
 	obj := upnpav.Object{
-		ID:         entry.Object.ID(),
+		ID:         entry.object.ID(),
 		Restricted: 1,
-		ParentID:   entry.Object.ParentID(),
+		ParentID:   entry.object.ParentID(),
 	}
 	if entry.FileInfo.IsDir() {
 		obj.Class = "object.container.storageFolder"
 		obj.Title = entry.FileInfo.Name()
 		return upnpav.Container{
 			Object:     obj,
-			ChildCount: entry.Object.ChildCount(),
+			ChildCount: entry.object.ChildCount(),
 		}
 	}
-	entryFilePath := entry.Object.FilePath()
+	entryFilePath := entry.object.FilePath()
 	mimeType := mimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
 	if !mimeTypeType.IsMedia() {
@@ -90,7 +90,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 		Host:   host,
 		Path:   iconPath,
 		RawQuery: url.Values{
-			"path": {entry.Object.Path},
+			"path": {entry.object.Path},
 		}.Encode(),
 	}).String()
 	obj.Icon = iconURI
@@ -141,7 +141,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 			Host:   host,
 			Path:   resPath,
 			RawQuery: url.Values{
-				"path": {entry.Object.Path},
+				"path": {entry.object.Path},
 			}.Encode(),
 		}).String(),
 		ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
@@ -153,7 +153,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 		Resolution: resolution,
 	})
 	if mimeTypeType == "video" {
-		item.Res = append(item.Res, transcodeResources(host, entry.Object.Path, resolution, duration)...)
+		item.Res = append(item.Res, transcodeResources(host, entry.object.Path, resolution, duration)...)
 	}
 	if mimeTypeType.IsMedia() {
 		item.Res = append(item.Res, upnpav.Resource{
@@ -162,7 +162,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 				Host:   host,
 				Path:   iconPath,
 				RawQuery: url.Values{
-					"path": {entry.Object.Path},
+					"path": {entry.object.Path},
 					"c":    {"jpeg"},
 				}.Encode(),
 			}).String(),
@@ -174,6 +174,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 
 func (me *contentDirectoryService) readContainer(o object, host, userAgent string) (ret []interface{}, err error) {
 	sfis := sortableFileInfoSlice{
+		// TODO(anacrolix): Dig up why this special cast was added.
 		FoldersLast: strings.Contains(userAgent, `AwoX/1.1`),
 	}
 	sfis.fileInfoSlice, err = o.readDir()
@@ -293,7 +294,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				"Result": didl_lite(func() string {
 					buf, err := xml.MarshalIndent(me.entryObject(cdsEntry{
 						FileInfo: fileInfo,
-						Object:   obj,
+						object:   obj,
 					}, host), "", "  ")
 					if err != nil {
 						panic(err) // because aliens
@@ -314,4 +315,105 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 		}, nil
 	}
 	return nil, &upnp.InvalidActionError
+}
+
+// Represents a ContentDirectory object.
+// TODO: Move to the CDS source.
+type object struct {
+	Path           string // The cleaned, absolute path for the object relative to the server.
+	RootObjectPath string
+}
+
+// Returns the number of children this object has, such as for a container.
+func (me *object) ChildCount() int {
+	dir, err := os.Open(me.FilePath())
+	if err != nil {
+		log.Print(err)
+		return 0
+	}
+	defer dir.Close()
+	names, err := dir.Readdirnames(-1)
+	if err != nil {
+		log.Print(err)
+	}
+	return len(names)
+}
+
+// Returns the actual local filesystem path for the object.
+func (o *object) FilePath() string {
+	return filepath.Join(o.RootObjectPath, filepath.FromSlash(o.Path))
+}
+
+// Returns the ObjectID for the object. This is used in various ContentDirectory actions.
+func (o object) ID() string {
+	switch len(o.Path) {
+	case 1:
+		return "0"
+	default:
+		return o.Path
+	}
+}
+
+// Returns the objects parent ObjectID. Fortunately it can be deduced from the ObjectID (for now).
+func (o *object) ParentID() string {
+	switch len(o.Path) {
+	case 1:
+		return "-1"
+	default:
+		return path.Dir(o.Path)
+	}
+}
+
+// TODO: Explain why this function exists rather than just calling os.(*File).Readdir.
+func (o *object) readDir() (fis []os.FileInfo, err error) {
+	dirPath := o.FilePath()
+	dirFile, err := os.Open(dirPath)
+	if err != nil {
+		return
+	}
+	defer dirFile.Close()
+	var dirContent []string
+	dirContent, err = dirFile.Readdirnames(-1)
+	if err != nil {
+		return
+	}
+	fis = make([]os.FileInfo, 0, len(dirContent))
+	for _, file := range dirContent {
+		fi, err := os.Stat(filepath.Join(dirPath, file))
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		fis = append(fis, fi)
+	}
+	return
+}
+
+// Puts an object with it's previously obtained FileInfo.
+type cdsEntry struct {
+	os.FileInfo
+	object
+}
+
+type sortableFileInfoSlice struct {
+	fileInfoSlice []os.FileInfo
+	FoldersLast   bool
+}
+
+func (me sortableFileInfoSlice) Len() int {
+	return len(me.fileInfoSlice)
+}
+
+func (me sortableFileInfoSlice) Less(i, j int) bool {
+	if me.fileInfoSlice[i].IsDir() && !me.fileInfoSlice[j].IsDir() {
+		return !me.FoldersLast
+	}
+	if !me.fileInfoSlice[i].IsDir() && me.fileInfoSlice[j].IsDir() {
+		return me.FoldersLast
+	}
+	return strings.ToLower(me.fileInfoSlice[i].Name()) < strings.ToLower(me.fileInfoSlice[j].Name())
+}
+
+func (me sortableFileInfoSlice) Swap(i, j int) {
+	me.fileInfoSlice[i], me.fileInfoSlice[j] = me.fileInfoSlice[j], me.fileInfoSlice[i]
 }
