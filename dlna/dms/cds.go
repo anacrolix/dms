@@ -8,6 +8,7 @@ import (
 	"bitbucket.org/anacrolix/dms/upnp"
 	"bitbucket.org/anacrolix/dms/upnpav"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -211,23 +212,21 @@ type browse struct {
 	RequestedCount int
 }
 
-// Converts an ContentDirectory ObjectID to the corresponding object path.
-func (me *contentDirectoryService) objectIdPath(oid string) (path_ string, err error) {
-	switch {
-	case oid == "0":
-		path_ = "/"
-	case len(oid) > 0 && oid[0] == '/':
-		path_ = path.Clean(oid)
-	default:
-		err = fmt.Errorf("invalid ObjectID: %q", oid)
-	}
-	return
-}
-
 // ContentDirectory object from ObjectID.
 func (me *contentDirectoryService) objectFromID(id string) (o object, err error) {
+	o.Path, err = url.QueryUnescape(id)
+	if err != nil {
+		return
+	}
+	if o.Path == "0" {
+		o.Path = "/"
+	}
+	o.Path = path.Clean(o.Path)
+	if !path.IsAbs(o.Path) {
+		err = errors.New("bad ObjectID")
+		return
+	}
 	o.RootObjectPath = me.RootObjectPath
-	o.Path, err = me.objectIdPath(id)
 	return
 }
 
@@ -318,7 +317,6 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 }
 
 // Represents a ContentDirectory object.
-// TODO: Move to the CDS source.
 type object struct {
 	Path           string // The cleaned, absolute path for the object relative to the server.
 	RootObjectPath string
@@ -346,22 +344,27 @@ func (o *object) FilePath() string {
 
 // Returns the ObjectID for the object. This is used in various ContentDirectory actions.
 func (o object) ID() string {
-	switch len(o.Path) {
-	case 1:
-		return "0"
-	default:
-		return o.Path
+	if !path.IsAbs(o.Path) {
+		panic(o.Path)
 	}
+	if len(o.Path) == 1 {
+		return "0"
+	}
+	return url.QueryEscape(o.Path)
 }
 
-// Returns the objects parent ObjectID. Fortunately it can be deduced from the ObjectID (for now).
-func (o *object) ParentID() string {
-	switch len(o.Path) {
-	case 1:
+func (o *object) IsRoot() bool {
+	return o.Path == "/"
+}
+
+// Returns the object's parent ObjectID. Fortunately it can be deduced from the
+// ObjectID (for now).
+func (o object) ParentID() string {
+	if o.IsRoot() {
 		return "-1"
-	default:
-		return path.Dir(o.Path)
 	}
+	o.Path = path.Dir(o.Path)
+	return o.ID()
 }
 
 // TODO: Explain why this function exists rather than just calling os.(*File).Readdir.

@@ -20,3 +20,9 @@ func TestRootObjectID(t *testing.T) {
 		t.FailNow()
 	}
 }
+
+func TestRootParentObjectID(t *testing.T) {
+	if (object{Path: "/"}).ParentID() != "-1" {
+		t.FailNow()
+	}
+}

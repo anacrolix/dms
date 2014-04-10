@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -543,17 +544,21 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (s *Server) cdsObject(_path string) object {
-	return object{path.Clean("/" + _path), s.RootObjectPath}
+func safeFilePath(root, given string) string {
+	return filepath.Join(root, filepath.FromSlash(path.Clean("/" + given))[1:])
+}
+
+func (s *Server) filePath(_path string) string {
+	return safeFilePath(s.RootObjectPath, _path)
 }
 
 func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
-	obj := me.cdsObject(r.URL.Query().Get("path"))
+	filePath := me.filePath(r.URL.Query().Get("path"))
 	c := r.URL.Query().Get("c")
 	if c == "" {
 		c = "png"
 	}
-	cmd := exec.Command("ffmpegthumbnailer", "-i", obj.FilePath(), "-o", "/dev/stdout", "-c"+c)
+	cmd := exec.Command("ffmpegthumbnailer", "-i", filePath, "-o", "/dev/stdout", "-c"+c)
 	// cmd.Stderr = os.Stderr
 	body, err := cmd.Output()
 	if err != nil {
@@ -584,10 +589,10 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
-		obj := server.cdsObject(r.URL.Query().Get("path"))
+		filePath := server.filePath(r.URL.Query().Get("path"))
 		k := r.URL.Query().Get("transcode")
 		if k == "" {
-			http.ServeFile(w, r, obj.FilePath())
+			http.ServeFile(w, r, filePath)
 			return
 		}
 		spec, ok := transcodes[k]
@@ -595,7 +600,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			http.Error(w, fmt.Sprintf("bad transcode spec key: %s", k), http.StatusBadRequest)
 			return
 		}
-		server.serveDLNATranscode(w, r, obj.FilePath(), spec)
+		server.serveDLNATranscode(w, r, filePath, spec)
 	})
 	mux.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
