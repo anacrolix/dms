@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"sync"
 )
 
@@ -110,7 +111,7 @@ func main() {
 		}
 	}()
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 	<-sigs
 	err := dmsServer.Close()
 	if err != nil {
