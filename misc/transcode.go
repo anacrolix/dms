@@ -31,11 +31,11 @@ func transcodePipe(args []string) (r io.ReadCloser, err error) {
 
 // Return a series of ffmpeg arguments that pick specific codecs for specific
 // streams. This requires use of the -map flag.
-func streamArgs(s map[string]string) (ret []string) {
+func streamArgs(s map[string]interface{}) (ret []string) {
 	defer func() {
 		if len(ret) != 0 {
 			ret = append(ret, []string{
-				"-map", "0:" + s["index"],
+				"-map", "0:" + strconv.Itoa(int(s["index"].(float64))),
 			}...)
 		}
 	}()

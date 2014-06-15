@@ -27,11 +27,16 @@ type contentDirectoryService struct {
 }
 
 // returns res attributes for the raw stream
-func (me *contentDirectoryService) itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string) {
-	fmt.Sscan(info.Format["bit_rate"], &bitrate)
-	if d := info.Format["duration"]; d != "" && d != "N/A" {
+func itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string) {
+	if bit_rate, exist := info.Format["bit_rate"]; exist {
+		if _, err := fmt.Sscan(bit_rate.(string), &bitrate); err != nil {
+			log.Println(err)
+		}
+	}
+
+	if d := info.Format["duration"]; d != nil && d.(string) != "N/A" {
 		var f float64
-		_, err := fmt.Sscan(info.Format["duration"], &f)
+		_, err := fmt.Sscan(info.Format["duration"].(string), &f)
 		if err != nil {
 			log.Println(err)
 		} else {
@@ -107,7 +112,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 	switch probeErr {
 	case nil:
 		if ffInfo != nil {
-			nativeBitrate, duration = me.itemResExtra(ffInfo)
+			nativeBitrate, duration = itemResExtra(ffInfo)
 		}
 	case ffmpeg.FfprobeUnavailableError:
 	default:
@@ -124,9 +129,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 				}
 				width := strm["width"]
 				height := strm["height"]
-				if width != "" && height != "" {
-					return fmt.Sprintf("%sx%s", width, height)
-				}
+				return fmt.Sprintf("%.0fx%.0f", width, height)
 			}
 		}
 		return ""

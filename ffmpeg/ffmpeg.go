@@ -2,21 +2,20 @@ package ffmpeg
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"os/exec"
 	"strings"
 )
 
 type Info struct {
-	Format  map[string]string
-	Streams []map[string]string
+	Format  map[string]interface{}
+	Streams []map[string]interface{}
 }
 
-func readSection(r *bufio.Reader, end string) (map[string]string, error) {
-	ret := make(map[string]string)
+func readSection(r *bufio.Reader, end string) (map[string]interface{}, error) {
+	ret := make(map[string]interface{})
 	for {
 		line, err := readLine(r)
 		if err != nil {
@@ -94,7 +93,7 @@ func Probe(path string) (info *Info, err error) {
 		err = FfprobeUnavailableError
 		return
 	}
-	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", path)
+	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", "-of", "json", path)
 	setHideWindow(cmd)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -115,37 +114,9 @@ func Probe(path string) (info *Info, err error) {
 			info = nil
 		}
 	}()
-	for {
-		line, err := readLine(r)
-		if err == io.EOF {
-			err = nil
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		switch line {
-		case "[FORMAT]":
-			info.Format, err = readSection(r, "[/FORMAT]")
-			if err != nil {
-				return nil, err
-			}
-		case "[STREAM]":
-			m, err := readSection(r, "[/STREAM]")
-			if err != nil {
-				return nil, err
-			}
-			var i int
-			if _, err := fmt.Sscan(m["index"], &i); err != nil {
-				return nil, err
-			}
-			if i != len(info.Streams) {
-				return nil, errors.New("streams unordered")
-			}
-			info.Streams = append(info.Streams, m)
-		default:
-			return nil, fmt.Errorf("unknown section: %v", line)
-		}
+	decoder := json.NewDecoder(r)
+	if err := decoder.Decode(info); err != nil {
+		return nil, err
 	}
 	return info, nil
 }

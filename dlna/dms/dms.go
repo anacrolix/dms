@@ -226,11 +226,11 @@ type FfprobeCacheItem struct {
 // update the UPnP object fields from ffprobe data
 // priority is given the format section, and then the streams sequentially
 func itemExtra(item *upnpav.Object, info *ffmpeg.Info) {
-	setFromTags := func(m map[string]string) {
+	setFromTags := func(m map[string]interface{}) {
 		for key, val := range m {
 			setIfUnset := func(s *string) {
 				if *s == "" {
-					*s = val
+					*s = val.(string)
 				}
 			}
 			switch strings.ToLower(key) {
