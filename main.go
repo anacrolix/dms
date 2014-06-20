@@ -5,7 +5,6 @@ import (
 	"bitbucket.org/anacrolix/dms/rrcache"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -14,9 +13,53 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"sync"
+	"syscall"
 )
+
+type dmsConfig struct {
+	Path             string
+	IfName           string
+	Http             string
+	FriendlyName     string
+	LogHeaders       bool
+	FFprobeCachePath string
+}
+
+func (config *dmsConfig) load(configPath string) {
+	file, err := os.Open(configPath)
+	if err != nil {
+		log.Printf("config error (config file: '%s'): %v\n", configPath, err)
+		return
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		log.Printf("config error: %v\n", err)
+		return
+	}
+}
+
+//default config
+var config = &dmsConfig{
+	Path:             "",
+	IfName:           "",
+	Http:             ":1338",
+	FriendlyName:     "",
+	LogHeaders:       false,
+	FFprobeCachePath: getDefaultFFprobeCachePath(),
+}
+
+func getDefaultFFprobeCachePath() (path string) {
+	_user, err := user.Current()
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	path = filepath.Join(_user.HomeDir, ".dms-ffprobe-cache")
+	return
+}
 
 type fFprobeCache struct {
 	c *rrcache.RRCache
@@ -46,33 +89,35 @@ func (fc *fFprobeCache) Set(key interface{}, value interface{}) {
 func main() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
 
-	path := flag.String("path", "", "browse root path")
-
-	ifName := flag.String("ifname", "", "specific SSDP network interface")
-	httpAddr := flag.String("http", ":1338", "http server port")
-	friendlyName := flag.String("friendlyName", "", "server friendly name")
-	logHeaders := flag.Bool("logHeaders", false, "log HTTP headers")
-	fFprobeCachePath := flag.String("fFprobeCachePath", func() (path string) {
-		_user, err := user.Current()
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		path = filepath.Join(_user.HomeDir, ".dms-ffprobe-cache")
-		return
-	}(), "path to FFprobe cache file")
+	path := flag.String("path", config.Path, "browse root path")
+	ifName := flag.String("ifname", config.IfName, "specific SSDP network interface")
+	http := flag.String("http", config.Http, "http server port")
+	friendlyName := flag.String("friendlyName", config.FriendlyName, "server friendly name")
+	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
+	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
+	configFilePath := flag.String("config", "", "json configuration file")
 
 	flag.Parse()
 	if flag.NArg() != 0 {
-		fmt.Fprintf(os.Stderr, "%s: %s\n", "unexpected positional arguments", flag.Args())
 		flag.Usage()
-		os.Exit(2)
+		log.Fatalf("%s: %s\n", "unexpected positional arguments", flag.Args())
+	}
+
+	config.Path = *path
+	config.IfName = *ifName
+	config.Http = *http
+	config.FriendlyName = *friendlyName
+	config.LogHeaders = *logHeaders
+	config.FFprobeCachePath = *fFprobeCachePath
+
+	if len(*configFilePath) > 0 {
+		config.load(*configFilePath)
 	}
 
 	cache := &fFprobeCache{
 		c: rrcache.New(64 << 20),
 	}
-	if err := loadFFprobeCache(cache, *fFprobeCachePath); err != nil {
+	if err := loadFFprobeCache(cache, config.FFprobeCachePath); err != nil {
 		log.Print(err)
 	}
 
@@ -92,18 +137,18 @@ func main() {
 				log.Fatal(err)
 			}
 			return
-		}(*ifName),
+		}(config.IfName),
 		HTTPConn: func() net.Listener {
-			conn, err := net.Listen("tcp", *httpAddr)
+			conn, err := net.Listen("tcp", config.Http)
 			if err != nil {
 				log.Fatal(err)
 			}
 			return conn
 		}(),
-		FriendlyName:   *friendlyName,
-		RootObjectPath: filepath.Clean(*path),
+		FriendlyName:   config.FriendlyName,
+		RootObjectPath: filepath.Clean(config.Path),
 		FFProbeCache:   cache,
-		LogHeaders:     *logHeaders,
+		LogHeaders:     config.LogHeaders,
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {
@@ -117,7 +162,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := saveFFprobeCache(cache, *fFprobeCachePath); err != nil {
+	if err := saveFFprobeCache(cache, config.FFprobeCachePath); err != nil {
 		log.Print(err)
 	}
 }
