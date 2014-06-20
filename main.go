@@ -117,7 +117,7 @@ func main() {
 	cache := &fFprobeCache{
 		c: rrcache.New(64 << 20),
 	}
-	if err := loadFFprobeCache(cache, config.FFprobeCachePath); err != nil {
+	if err := cache.load(config.FFprobeCachePath); err != nil {
 		log.Print(err)
 	}
 
@@ -162,12 +162,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := saveFFprobeCache(cache, config.FFprobeCachePath); err != nil {
+	if err := cache.save(config.FFprobeCachePath); err != nil {
 		log.Print(err)
 	}
 }
 
-func loadFFprobeCache(cache *fFprobeCache, path string) error {
+func (cache *fFprobeCache) load(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -186,7 +186,7 @@ func loadFFprobeCache(cache *fFprobeCache, path string) error {
 	return nil
 }
 
-func saveFFprobeCache(cache *fFprobeCache, path string) error {
+func (cache *fFprobeCache) save(path string) error {
 	cache.Lock()
 	items := cache.c.Items()
 	cache.Unlock()
