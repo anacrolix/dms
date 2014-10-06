@@ -4,9 +4,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os/exec"
-	"strings"
+	"time"
 )
 
 type Info struct {
@@ -14,42 +15,34 @@ type Info struct {
 	Streams []map[string]interface{}
 }
 
-func readSection(r *bufio.Reader, end string) (map[string]interface{}, error) {
-	ret := make(map[string]interface{})
-	for {
-		line, err := readLine(r)
-		if err != nil {
-			return nil, err
-		}
-		if line == end {
-			break
-		}
-		ss := strings.SplitN(line, "=", 2)
-		if len(ss) != 2 {
-			continue
-		}
-		opt := ss[0]
-		val := ss[1]
-		ret[opt] = val
+// returns res attributes for the raw stream
+func (info *Info) Bitrate() (bitrate uint, err error) {
+	bit_rate, exist := info.Format["bit_rate"]
+	if !exist {
+		err = errors.New("no bit_rate key in format")
+		return
 	}
-	return ret, nil
+	_, err = fmt.Sscan(bit_rate.(string), &bitrate)
+	return
 }
 
-func readLine(r *bufio.Reader) (line string, err error) {
-	for {
-		var (
-			buf []byte
-			isP bool
-		)
-		buf, isP, err = r.ReadLine()
-		if err != nil {
-			return
-		}
-		line += string(buf)
-		if !isP {
-			break
-		}
+func (info *Info) Duration() (duration time.Duration, err error) {
+	di := info.Format["duration"]
+	if di == nil {
+		err = errors.New("no format duration")
+		return
 	}
+	ds := di.(string)
+	if ds == "N/A" {
+		err = errors.New("N/A")
+		return
+	}
+	var f float64
+	_, err = fmt.Sscan(ds, &f)
+	if err != nil {
+		return
+	}
+	duration = time.Duration(f * float64(time.Second))
 	return
 }
 

@@ -1,12 +1,6 @@
 package dms
 
 import (
-	"bitbucket.org/anacrolix/dms/dlna"
-	"bitbucket.org/anacrolix/dms/ffmpeg"
-	"bitbucket.org/anacrolix/dms/futures"
-	"bitbucket.org/anacrolix/dms/misc"
-	"bitbucket.org/anacrolix/dms/upnp"
-	"bitbucket.org/anacrolix/dms/upnpav"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -20,34 +14,22 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"bitbucket.org/anacrolix/dms/misc"
+
+	"bitbucket.org/anacrolix/dms/dlna"
+	"bitbucket.org/anacrolix/dms/ffmpeg"
+	"bitbucket.org/anacrolix/dms/futures"
+	"bitbucket.org/anacrolix/dms/upnp"
+	"bitbucket.org/anacrolix/dms/upnpav"
 )
 
 type contentDirectoryService struct {
 	*Server
 }
 
-// returns res attributes for the raw stream
-func itemResExtra(info *ffmpeg.Info) (bitrate uint, duration string) {
-	if bit_rate, exist := info.Format["bit_rate"]; exist {
-		if _, err := fmt.Sscan(bit_rate.(string), &bitrate); err != nil {
-			log.Println(err)
-		}
-	}
-
-	if d := info.Format["duration"]; d != nil && d.(string) != "N/A" {
-		var f float64
-		_, err := fmt.Sscan(info.Format["duration"].(string), &f)
-		if err != nil {
-			log.Println(err)
-		} else {
-			duration = misc.FormatDurationSexagesimal(time.Duration(f * float64(time.Second)))
-		}
-	}
-	return
-}
-
 // Can return nil info with nil err if an earlier Probe gave an error.
-func (srv *contentDirectoryService) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
+func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
 	// We don't want relative paths in the cache.
 	path, err = filepath.Abs(path)
 	if err != nil {
@@ -106,13 +88,16 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 	obj.Class = "object.item." + string(mimeTypeType) + "Item"
 	var (
 		nativeBitrate uint
-		duration      string
+		resDuration   string
 	)
 	ffInfo, probeErr := me.ffmpegProbe(entryFilePath)
 	switch probeErr {
 	case nil:
 		if ffInfo != nil {
-			nativeBitrate, duration = itemResExtra(ffInfo)
+			nativeBitrate, _ = ffInfo.Bitrate()
+			if d, err := ffInfo.Duration(); err == nil {
+				resDuration = misc.FormatDurationSexagesimal(d)
+			}
 		}
 	case ffmpeg.FfprobeUnavailableError:
 	default:
@@ -152,12 +137,12 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 			SupportRange: true,
 		}.String()),
 		Bitrate:    nativeBitrate,
-		Duration:   duration,
+		Duration:   resDuration,
 		Size:       uint64(entry.FileInfo.Size()),
 		Resolution: resolution,
 	})
 	if mimeTypeType == "video" {
-		item.Res = append(item.Res, transcodeResources(host, entry.object.Path, resolution, duration)...)
+		item.Res = append(item.Res, transcodeResources(host, entry.object.Path, resolution, resDuration)...)
 	}
 	if mimeTypeType.IsMedia() {
 		item.Res = append(item.Res, upnpav.Resource{
