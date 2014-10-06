@@ -1,13 +1,6 @@
 package dms
 
 import (
-	"bitbucket.org/anacrolix/dms/dlna"
-	"bitbucket.org/anacrolix/dms/ffmpeg"
-	"bitbucket.org/anacrolix/dms/misc"
-	"bitbucket.org/anacrolix/dms/soap"
-	"bitbucket.org/anacrolix/dms/ssdp"
-	"bitbucket.org/anacrolix/dms/upnp"
-	"bitbucket.org/anacrolix/dms/upnpav"
 	"bytes"
 	"crypto/md5"
 	"encoding/xml"
@@ -26,6 +19,14 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"bitbucket.org/anacrolix/dms/dlna"
+	"bitbucket.org/anacrolix/dms/ffmpeg"
+	"bitbucket.org/anacrolix/dms/soap"
+	"bitbucket.org/anacrolix/dms/ssdp"
+	"bitbucket.org/anacrolix/dms/transcode"
+	"bitbucket.org/anacrolix/dms/upnp"
+	"bitbucket.org/anacrolix/dms/upnpav"
 )
 
 const (
@@ -43,16 +44,17 @@ const (
 type transcodeSpec struct {
 	mimeType        string
 	DLNAProfileName string
-	Transcode       func(path string, start, length time.Duration) (r io.ReadCloser, err error)
+	Transcode       func(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error)
 }
 
 var transcodes = map[string]transcodeSpec{
 	"t": {
 		mimeType:        "video/mpeg",
 		DLNAProfileName: "MPEG_PS_PAL",
-		Transcode:       misc.Transcode,
+		Transcode:       transcode.Transcode,
 	},
-	"vp8": {mimeType: "video/webm", Transcode: misc.VP8Transcode},
+	"vp8":        {mimeType: "video/webm", Transcode: transcode.VP8Transcode},
+	"chromecast": {mimeType: "video/x-matroska", Transcode: transcode.ChromecastTranscode},
 }
 
 func makeDeviceUuid(unique string) string {
@@ -381,7 +383,7 @@ func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, ok
 	return
 }
 
-func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string, ts transcodeSpec) {
+func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string, ts transcodeSpec, tsname string) {
 	w.Header().Set(dlna.TransferModeDomain, "Streaming")
 	w.Header().Set("content-type", ts.mimeType)
 	w.Header().Set(dlna.ContentFeaturesDomain, (dlna.ContentFeatures{
@@ -392,7 +394,27 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 	if !ok {
 		return
 	}
-	p, err := ts.Transcode(path_, range_.Start, range_.End-range_.Start)
+	ffInfo, _ := me.ffmpegProbe(path_)
+	if ffInfo != nil {
+		if duration, err := ffInfo.Duration(); err == nil {
+			s := fmt.Sprintf("%f", duration.Seconds())
+			w.Header().Set("content-duration", s)
+			w.Header().Set("x-content-duration", s)
+		}
+	}
+	stderrPath := func() string {
+		u, _ := user.Current()
+		return filepath.Join(u.HomeDir, ".dms", "log", tsname, filepath.Base(path_))
+	}()
+	os.MkdirAll(filepath.Dir(stderrPath), 0750)
+	logFile, err := os.Create(stderrPath)
+	if err != nil {
+		log.Printf("couldn't create transcode log file: %s", err)
+	} else {
+		defer logFile.Close()
+		log.Printf("logging transcode to %q", stderrPath)
+	}
+	p, err := ts.Transcode(path_, range_.Start, range_.End-range_.Start, logFile)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -600,7 +622,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			http.Error(w, fmt.Sprintf("bad transcode spec key: %s", k), http.StatusBadRequest)
 			return
 		}
-		server.serveDLNATranscode(w, r, filePath, spec)
+		server.serveDLNATranscode(w, r, filePath, spec, k)
 	})
 	mux.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)

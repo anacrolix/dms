@@ -1,22 +1,25 @@
-package misc
+// Package transcode implements routines for transcoding to various kinds of
+// receiver.
+package transcode
 
 import (
-	"bitbucket.org/anacrolix/dms/ffmpeg"
 	"io"
 	"log"
-	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"time"
+
+	"bitbucket.org/anacrolix/dms/ffmpeg"
+	. "bitbucket.org/anacrolix/dms/misc"
 )
 
 // Invokes an external command and returns a reader from its stdout. The
 // command is waited on asynchronously.
-func transcodePipe(args []string) (r io.ReadCloser, err error) {
+func transcodePipe(args []string, stderr io.Writer) (r io.ReadCloser, err error) {
 	log.Println("transcode command:", args)
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = stderr
 	r, err = cmd.StdoutPipe()
 	if err != nil {
 		return
@@ -25,7 +28,12 @@ func transcodePipe(args []string) (r io.ReadCloser, err error) {
 	if err != nil {
 		return
 	}
-	go cmd.Wait()
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			log.Printf("command %s failed: %s", args, err)
+		}
+	}()
 	return
 }
 
@@ -62,7 +70,7 @@ func streamArgs(s map[string]interface{}) (ret []string) {
 }
 
 // Streams the desired file in the MPEG_PS_PAL DLNA profile.
-func Transcode(path string, start, length time.Duration) (r io.ReadCloser, err error) {
+func Transcode(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error) {
 	args := []string{
 		"ffmpeg",
 		"-threads", strconv.FormatInt(int64(runtime.NumCPU()), 10),
@@ -85,11 +93,11 @@ func Transcode(path string, start, length time.Duration) (r io.ReadCloser, err e
 		args = append(args, streamArgs(s)...)
 	}
 	args = append(args, []string{"-f", "mpegts", "pipe:"}...)
-	return transcodePipe(args)
+	return transcodePipe(args, stderr)
 }
 
 // Returns a stream of Chromecast supported VP8.
-func VP8Transcode(path string, start, length time.Duration) (r io.ReadCloser, err error) {
+func VP8Transcode(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error) {
 	args := []string{
 		"avconv",
 		"-threads", strconv.FormatInt(int64(runtime.NumCPU()), 10),
@@ -107,5 +115,25 @@ func VP8Transcode(path string, start, length time.Duration) (r io.ReadCloser, er
 		// "-c:v", "libvpx", "-crf", "10",
 		"-f", "webm",
 		"pipe:"}...)
-	return transcodePipe(args)
+	return transcodePipe(args, stderr)
+}
+
+// Returns a stream of Chromecast supported matroska.
+func ChromecastTranscode(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error) {
+	args := []string{
+		"ffmpeg",
+		"-ss", FormatDurationSexagesimal(start),
+		"-i", path,
+		"-c:v", "libx264", "-preset", "ultrafast", "-profile:v", "high", "-level", "5.0",
+		"-movflags", "+faststart",
+	}
+	if length > 0 {
+		args = append(args, []string{
+			"-t", FormatDurationSexagesimal(length),
+		}...)
+	}
+	args = append(args, []string{
+		"-f", "matroska",
+		"pipe:"}...)
+	return transcodePipe(args, stderr)
 }
