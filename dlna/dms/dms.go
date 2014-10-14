@@ -727,3 +727,26 @@ func (me *Server) location(ip net.IP) string {
 	}
 	return url.String()
 }
+
+// Can return nil info with nil err if an earlier Probe gave an error.
+func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
+	// We don't want relative paths in the cache.
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	key := ffmpegInfoCacheKey{path, fi.ModTime().UnixNano()}
+	value, ok := srv.FFProbeCache.Get(key)
+	if !ok {
+		info, err = ffmpeg.Probe(path)
+		err = suppressFFmpegProbeDataErrors(err)
+		srv.FFProbeCache.Set(key, info)
+		return
+	}
+	info = value.(*ffmpeg.Info)
+	return
+}
