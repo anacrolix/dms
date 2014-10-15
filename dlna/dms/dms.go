@@ -197,8 +197,9 @@ type Server struct {
 	closed         chan struct{}
 	ssdpStopped    chan struct{}
 	// The service SOAP handler keyed by service URN.
-	services   map[string]UPnPService
-	LogHeaders bool
+	services    map[string]UPnPService
+	LogHeaders  bool
+	NoTranscode bool // Disable transcoding, and the resource elements implied in the CDS.
 }
 
 // UPnP SOAP service.
@@ -615,6 +616,10 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		k := r.URL.Query().Get("transcode")
 		if k == "" {
 			http.ServeFile(w, r, filePath)
+			return
+		}
+		if server.NoTranscode {
+			http.Error(w, "transcodes disabled", http.StatusNotFound)
 			return
 		}
 		spec, ok := transcodes[k]

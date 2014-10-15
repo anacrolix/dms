@@ -24,6 +24,7 @@ type dmsConfig struct {
 	FriendlyName     string
 	LogHeaders       bool
 	FFprobeCachePath string
+	NoTranscode      bool
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -96,6 +97,7 @@ func main() {
 	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
+	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
 
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -149,6 +151,7 @@ func main() {
 		RootObjectPath: filepath.Clean(config.Path),
 		FFProbeCache:   cache,
 		LogHeaders:     config.LogHeaders,
+		NoTranscode:    config.NoTranscode,
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {

@@ -119,7 +119,9 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 		Resolution: resolution,
 	})
 	if mimeTypeType == "video" {
-		item.Res = append(item.Res, transcodeResources(host, entry.object.Path, resolution, resDuration)...)
+		if !me.NoTranscode {
+			item.Res = append(item.Res, transcodeResources(host, entry.object.Path, resolution, resDuration)...)
+		}
 	}
 	if mimeTypeType.IsMedia() {
 		item.Res = append(item.Res, upnpav.Resource{
