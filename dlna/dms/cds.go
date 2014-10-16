@@ -98,8 +98,8 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 	}()
 	item := upnpav.Item{
 		Object: obj,
-		// Capacity: 1 for raw, 2 for transcode, 1 for icon.
-		Res: make([]upnpav.Resource, 0, 4),
+		// Capacity: 1 for raw, 1 for icon, plus transcodes.
+		Res: make([]upnpav.Resource, 0, 2+len(transcodes)),
 	}
 	item.Res = append(item.Res, upnpav.Resource{
 		URL: (&url.URL{
