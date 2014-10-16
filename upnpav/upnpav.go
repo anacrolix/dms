@@ -41,4 +41,5 @@ type Object struct {
 	Album       string `xml:"upnp:album,omitempty"`
 	Genre       string `xml:"upnp:genre,omitempty"`
 	AlbumArtURI string `xml:"upnp:albumArtURI,omitempty"`
+	Searchable  int    `xml:"searchable,attr"`
 }
