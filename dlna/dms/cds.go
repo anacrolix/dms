@@ -236,7 +236,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
 				objs = objs[:browse.RequestedCount]
 			}
-			result, err := xml.MarshalIndent(objs, "", "  ")
+			result, err := xml.Marshal(objs)
 			if err != nil {
 				panic(err)
 			}
@@ -258,10 +258,10 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				"TotalMatches":   "1",
 				"NumberReturned": "1",
 				"Result": didl_lite(func() string {
-					buf, err := xml.MarshalIndent(me.entryObject(cdsEntry{
+					buf, err := xml.Marshal(me.entryObject(cdsEntry{
 						FileInfo: fileInfo,
 						object:   obj,
-					}, host), "", "  ")
+					}, host))
 					if err != nil {
 						panic(err) // because aliens
 					}
