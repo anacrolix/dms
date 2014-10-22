@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bitbucket.org/anacrolix/dms/dlna/dms"
-	"bitbucket.org/anacrolix/dms/rrcache"
 	"encoding/json"
 	"flag"
 	"io/ioutil"
@@ -15,6 +13,9 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+
+	"bitbucket.org/anacrolix/dms/dlna/dms"
+	"bitbucket.org/anacrolix/dms/rrcache"
 )
 
 type dmsConfig struct {
