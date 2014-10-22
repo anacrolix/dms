@@ -86,7 +86,7 @@ func Probe(path string) (info *Info, err error) {
 		err = FfprobeUnavailableError
 		return
 	}
-	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", "-of", "json", path)
+	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", "-print_format", "json", path)
 	setHideWindow(cmd)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
