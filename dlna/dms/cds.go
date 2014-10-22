@@ -30,18 +30,22 @@ type contentDirectoryService struct {
 
 // Turns the given entry and DMS host into a UPnP object. A nil object is
 // returned if the entry is not of interest.
-func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) interface{} {
+func (me *contentDirectoryService) entryObject(entry cdsEntry, host, userAgent string) interface{} {
 	obj := upnpav.Object{
 		ID:         entry.object.ID(),
 		Restricted: 1,
 		ParentID:   entry.object.ParentID(),
 	}
 	if entry.FileInfo.IsDir() {
+		childCount := me.objectChildCount(entry.object, userAgent)
+		if childCount == 0 {
+			return nil
+		}
 		obj.Class = "object.container.storageFolder"
 		obj.Title = entry.FileInfo.Name()
 		return upnpav.Container{
 			Object:     obj,
-			ChildCount: entry.object.ChildCount(),
+			ChildCount: childCount,
 		}
 	}
 	entryFilePath := entry.object.FilePath()
@@ -140,6 +144,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host string) inte
 	return item
 }
 
+// Returns all the upnpav objects in a directory.
 func (me *contentDirectoryService) readContainer(o object, host, userAgent string) (ret []interface{}, err error) {
 	sfis := sortableFileInfoSlice{
 		// TODO(anacrolix): Dig up why this special cast was added.
@@ -150,12 +155,14 @@ func (me *contentDirectoryService) readContainer(o object, host, userAgent strin
 		return
 	}
 	sort.Sort(sfis)
+	// TODO: Does this actually provide any kind of speed up? Isn't it I/O
+	// blocked anyway?
 	pool := futures.NewExecutor(runtime.NumCPU())
 	defer pool.Shutdown()
 	for obj := range pool.Map(func(entry interface{}) interface{} {
-		return me.entryObject(entry.(cdsEntry), host)
+		return me.entryObject(entry.(cdsEntry), host, userAgent)
 	}, func() <-chan interface{} {
-		ret := make(chan interface{})
+		ret := make(chan interface{}, 1)
 		go func() {
 			for _, fi := range sfis.fileInfoSlice {
 				ret <- cdsEntry{fi, object{path.Join(o.Path, fi.Name()), me.RootObjectPath}}
@@ -261,7 +268,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 					buf, err := xml.Marshal(me.entryObject(cdsEntry{
 						FileInfo: fileInfo,
 						object:   obj,
-					}, host))
+					}, host, userAgent))
 					if err != nil {
 						panic(err) // because aliens
 					}
@@ -290,18 +297,12 @@ type object struct {
 }
 
 // Returns the number of children this object has, such as for a container.
-func (me *object) ChildCount() int {
-	dir, err := os.Open(me.FilePath())
+func (cds *contentDirectoryService) objectChildCount(me object, userAgent string) int {
+	objs, err := cds.readContainer(me, "", userAgent)
 	if err != nil {
-		log.Print(err)
-		return 0
+		log.Printf("error reading container: %s", err)
 	}
-	defer dir.Close()
-	names, err := dir.Readdirnames(-1)
-	if err != nil {
-		log.Print(err)
-	}
-	return len(names)
+	return len(objs)
 }
 
 // Returns the actual local filesystem path for the object.
@@ -334,7 +335,8 @@ func (o object) ParentID() string {
 	return o.ID()
 }
 
-// TODO: Explain why this function exists rather than just calling os.(*File).Readdir.
+// This function exists rather than just calling os.(*File).Readdir because I
+// want to stat(), not lstat() each entry.
 func (o *object) readDir() (fis []os.FileInfo, err error) {
 	dirPath := o.FilePath()
 	dirFile, err := os.Open(dirPath)
@@ -351,7 +353,6 @@ func (o *object) readDir() (fis []os.FileInfo, err error) {
 	for _, file := range dirContent {
 		fi, err := os.Stat(filepath.Join(dirPath, file))
 		if err != nil {
-			log.Print(err)
 			continue
 		}
 		fis = append(fis, fi)
