@@ -365,11 +365,12 @@ func parseDLNARangeHeader(val string) (ret dlna.NPTRange, err error) {
 // Determines the time-based range to transcode, and sets the appropriate
 // headers. Returns !ok if there was an error and the caller should stop
 // handling the request.
-func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, ok bool) {
+func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, partialResponse, ok bool) {
 	if len(hs[http.CanonicalHeaderKey(dlna.TimeSeekRangeDomain)]) == 0 {
 		ok = true
 		return
 	}
+	partialResponse = true
 	h := hs.Get(dlna.TimeSeekRangeDomain)
 	r, err := parseDLNARangeHeader(h)
 	if err != nil {
@@ -381,6 +382,7 @@ func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, ok
 	//
 	// TODO: Check that the request range can't already have /.
 	w.Header().Set(dlna.TimeSeekRangeDomain, h+"/*")
+	ok = true
 	return
 }
 
@@ -391,7 +393,10 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 		Transcoded:      true,
 		SupportTimeSeek: true,
 	}).String())
-	range_, ok := handleDLNARange(w, r.Header)
+	// If a range of any kind is given, we have to respond with 206 if we're
+	// interpreting that range. Since only the DLNA range is handled in this
+	// function, it alone determines if we'll give a partial response.
+	range_, partialResponse, ok := handleDLNARange(w, r.Header)
 	if !ok {
 		return
 	}
@@ -423,12 +428,13 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 	defer p.Close()
 	// I recently switched this to returning 200 if no range is specified for
 	// pure UPnP clients. It's possible that DLNA clients will *always* expect
-	// 206.
+	// 206. It appears the HTTP standard requires that 206 only be used if a
+	// response is not interpreting any range headers.
 	w.WriteHeader(func() int {
-		if range_.Start == 0 && range_.End <= 0 {
-			return http.StatusOK
-		} else {
+		if partialResponse {
 			return http.StatusPartialContent
+		} else {
+			return http.StatusOK
 		}
 	}())
 	io.Copy(w, p)
