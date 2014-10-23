@@ -154,7 +154,7 @@ func (me *contentDirectoryService) readContainer(o object, host, userAgent strin
 	}
 	sort.Sort(sfis)
 	for _, fi := range sfis.fileInfoSlice {
-		obj := me.entryObject(cdsEntry{fi, object{path.Join(o.path, fi.Name()), me.RootObjectPath}}, host, userAgent)
+		obj := me.entryObject(cdsEntry{fi, object{path.Join(o.Path, fi.Name()), me.RootObjectPath}}, host, userAgent)
 		if obj != nil {
 			ret = append(ret, obj)
 		}
