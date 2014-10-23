@@ -46,7 +46,10 @@ func (info *Info) Duration() (duration time.Duration, err error) {
 	return
 }
 
-var ffprobePath string
+var (
+	ffprobePath      string
+	outputFormatFlag = "-of"
+)
 
 func isExecErrNotFound(err error) bool {
 	if err == exec.ErrNotFound {
@@ -63,6 +66,7 @@ func init() {
 	var err error
 	ffprobePath, err = exec.LookPath("ffprobe")
 	if err == nil {
+		outputFormatFlag = "-print_format"
 		return
 	}
 	if !isExecErrNotFound(err) {
@@ -86,7 +90,7 @@ func Probe(path string) (info *Info, err error) {
 		err = FfprobeUnavailableError
 		return
 	}
-	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", "-print_format", "json", path)
+	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", outputFormatFlag, "json", path)
 	setHideWindow(cmd)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
