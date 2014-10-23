@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -19,7 +18,6 @@ import (
 
 	"bitbucket.org/anacrolix/dms/dlna"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
-	"bitbucket.org/anacrolix/dms/futures"
 	"bitbucket.org/anacrolix/dms/upnp"
 	"bitbucket.org/anacrolix/dms/upnpav"
 )
@@ -155,22 +153,8 @@ func (me *contentDirectoryService) readContainer(o object, host, userAgent strin
 		return
 	}
 	sort.Sort(sfis)
-	// TODO: Does this actually provide any kind of speed up? Isn't it I/O
-	// blocked anyway?
-	pool := futures.NewExecutor(runtime.NumCPU())
-	defer pool.Shutdown()
-	for obj := range pool.Map(func(entry interface{}) interface{} {
-		return me.entryObject(entry.(cdsEntry), host, userAgent)
-	}, func() <-chan interface{} {
-		ret := make(chan interface{}, 1)
-		go func() {
-			for _, fi := range sfis.fileInfoSlice {
-				ret <- cdsEntry{fi, object{path.Join(o.Path, fi.Name()), me.RootObjectPath}}
-			}
-			close(ret)
-		}()
-		return ret
-	}()) {
+	for _, fi := range sfis.fileInfoSlice {
+		obj := me.entryObject(cdsEntry{fi, object{path.Join(o.path, fi.Name()), me.RootObjectPath}}, host, userAgent)
 		if obj != nil {
 			ret = append(ret, obj)
 		}
