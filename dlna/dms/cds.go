@@ -344,12 +344,6 @@ func (o *object) readDir() (fis []os.FileInfo, err error) {
 	return
 }
 
-// Puts an object with it's previously obtained FileInfo.
-type cdsEntry struct {
-	os.FileInfo
-	object
-}
-
 type sortableFileInfoSlice struct {
 	fileInfoSlice []os.FileInfo
 	FoldersLast   bool
