@@ -28,25 +28,24 @@ type contentDirectoryService struct {
 
 // Turns the given entry and DMS host into a UPnP object. A nil object is
 // returned if the entry is not of interest.
-func (me *contentDirectoryService) entryObject(entry cdsEntry, host, userAgent string) interface{} {
+func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) interface{} {
 	obj := upnpav.Object{
-		ID:         entry.object.ID(),
+		ID:         cdsObject.ID(),
 		Restricted: 1,
-		ParentID:   entry.object.ParentID(),
+		ParentID:   cdsObject.ParentID(),
 	}
-	if entry.FileInfo.IsDir() {
-		childCount := me.objectChildCount(entry.object, userAgent)
-		if childCount == 0 {
+	if fileInfo.IsDir() {
+		if !me.objectHasChildren(cdsObject) {
 			return nil
 		}
 		obj.Class = "object.container.storageFolder"
-		obj.Title = entry.FileInfo.Name()
+		obj.Title = fileInfo.Name()
 		return upnpav.Container{
 			Object:     obj,
-			ChildCount: childCount,
+			ChildCount: me.objectChildCount(cdsObject),
 		}
 	}
-	entryFilePath := entry.object.FilePath()
+	entryFilePath := cdsObject.FilePath()
 	mimeType := mimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
 	if !mimeTypeType.IsMedia() {
@@ -57,7 +56,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host, userAgent s
 		Host:   host,
 		Path:   iconPath,
 		RawQuery: url.Values{
-			"path": {entry.object.Path},
+			"path": {cdsObject.Path},
 		}.Encode(),
 	}).String()
 	obj.Icon = iconURI
@@ -83,7 +82,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host, userAgent s
 		log.Printf("error probing %s: %s", entryFilePath, probeErr)
 	}
 	if obj.Title == "" {
-		obj.Title = entry.FileInfo.Name()
+		obj.Title = fileInfo.Name()
 	}
 	resolution := func() string {
 		if ffInfo != nil {
@@ -109,7 +108,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host, userAgent s
 			Host:   host,
 			Path:   resPath,
 			RawQuery: url.Values{
-				"path": {entry.object.Path},
+				"path": {cdsObject.Path},
 			}.Encode(),
 		}).String(),
 		ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
@@ -117,12 +116,12 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host, userAgent s
 		}.String()),
 		Bitrate:    nativeBitrate,
 		Duration:   resDuration,
-		Size:       uint64(entry.FileInfo.Size()),
+		Size:       uint64(fileInfo.Size()),
 		Resolution: resolution,
 	})
 	if mimeTypeType == "video" {
 		if !me.NoTranscode {
-			item.Res = append(item.Res, transcodeResources(host, entry.object.Path, resolution, resDuration)...)
+			item.Res = append(item.Res, transcodeResources(host, cdsObject.Path, resolution, resDuration)...)
 		}
 	}
 	if mimeTypeType.IsMedia() {
@@ -132,7 +131,7 @@ func (me *contentDirectoryService) entryObject(entry cdsEntry, host, userAgent s
 				Host:   host,
 				Path:   iconPath,
 				RawQuery: url.Values{
-					"path": {entry.object.Path},
+					"path": {cdsObject.Path},
 					"c":    {"jpeg"},
 				}.Encode(),
 			}).String(),
@@ -154,7 +153,7 @@ func (me *contentDirectoryService) readContainer(o object, host, userAgent strin
 	}
 	sort.Sort(sfis)
 	for _, fi := range sfis.fileInfoSlice {
-		obj := me.entryObject(cdsEntry{fi, object{path.Join(o.Path, fi.Name()), me.RootObjectPath}}, host, userAgent)
+		obj := me.cdsObjectToUpnpavObject(object{path.Join(o.Path, fi.Name()), me.RootObjectPath}, fi, host, userAgent)
 		if obj != nil {
 			ret = append(ret, obj)
 		}
@@ -249,10 +248,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				"TotalMatches":   "1",
 				"NumberReturned": "1",
 				"Result": didl_lite(func() string {
-					buf, err := xml.Marshal(me.entryObject(cdsEntry{
-						FileInfo: fileInfo,
-						object:   obj,
-					}, host, userAgent))
+					buf, err := xml.Marshal(me.cdsObjectToUpnpavObject(obj, fileInfo, host, userAgent))
 					if err != nil {
 						panic(err) // because aliens
 					}
@@ -281,12 +277,16 @@ type object struct {
 }
 
 // Returns the number of children this object has, such as for a container.
-func (cds *contentDirectoryService) objectChildCount(me object, userAgent string) int {
-	objs, err := cds.readContainer(me, "", userAgent)
+func (cds *contentDirectoryService) objectChildCount(me object) int {
+	objs, err := cds.readContainer(me, "", "")
 	if err != nil {
 		log.Printf("error reading container: %s", err)
 	}
 	return len(objs)
+}
+
+func (cds *contentDirectoryService) objectHasChildren(obj object) bool {
+	return cds.objectChildCount(obj) != 0
 }
 
 // Returns the actual local filesystem path for the object.
