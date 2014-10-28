@@ -45,6 +45,9 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 			ChildCount: me.objectChildCount(cdsObject),
 		}
 	}
+	if !fileInfo.Mode().IsRegular() {
+		return nil
+	}
 	entryFilePath := cdsObject.FilePath()
 	mimeType := mimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
