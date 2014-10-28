@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"os/exec"
@@ -643,6 +644,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 	handleSCPDs(mux)
 	mux.HandleFunc(serviceControlURL, server.serviceControlHandler)
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
 }
 
 func (s *Server) initServices() {
