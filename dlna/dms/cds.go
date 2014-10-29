@@ -35,14 +35,14 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		ParentID:   cdsObject.ParentID(),
 	}
 	if fileInfo.IsDir() {
-		if !me.objectHasChildren(cdsObject) {
-			return nil
-		}
+		//if !me.objectHasChildren(cdsObject) {
+	//		return nil
+	//	}
 		obj.Class = "object.container.storageFolder"
 		obj.Title = fileInfo.Name()
 		return upnpav.Container{
 			Object:     obj,
-			ChildCount: me.objectChildCount(cdsObject),
+	//		ChildCount: me.objectChildCount(cdsObject),
 		}
 	}
 	if !fileInfo.Mode().IsRegular() {
