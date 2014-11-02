@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os/exec"
 	"time"
@@ -85,34 +86,55 @@ func init() {
 
 var FfprobeUnavailableError = errors.New("ffprobe not available")
 
+// Sends the last line from r to ch, or returns the error scanning r.
+func lastLine(r io.Reader, ch chan<- string) (err error) {
+	defer close(ch)
+	scanner := bufio.NewScanner(r)
+	scanner.Split(bufio.ScanLines)
+	var line string
+	for scanner.Scan() {
+		line = scanner.Text()
+	}
+	err = scanner.Err()
+	if err == nil {
+		ch <- line
+	}
+	return err
+}
+
+// Runs ffprobe or avprobe or similar on the given file path.
 func Probe(path string) (info *Info, err error) {
 	if ffprobePath == "" {
 		err = FfprobeUnavailableError
 		return
 	}
-	cmd := exec.Command(ffprobePath, "-show_format", "-show_streams", outputFormatFlag, "json", path)
-	setHideWindow(cmd)
+	cmd := exec.Command(ffprobePath, "-loglevel", "error", "-show_format", "-show_streams", outputFormatFlag, "json", path)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return
 	}
+	errPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return
+	}
+	setHideWindow(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	r := bufio.NewReader(out)
-	info = &Info{}
 	defer out.Close()
+	lastLineCh := make(chan string, 1)
+	go lastLine(errPipe, lastLineCh)
 	defer func() {
 		waitErr := cmd.Wait()
 		if waitErr != nil {
 			err = waitErr
-		}
-		if err != nil {
-			info = nil
+			if lastLine, ok := <-lastLineCh; ok {
+				err = fmt.Errorf("%s: %s", err, lastLine)
+			}
 		}
 	}()
-	decoder := json.NewDecoder(r)
-	if err := decoder.Decode(info); err != nil {
+	decoder := json.NewDecoder(bufio.NewReader(out))
+	if err := decoder.Decode(&info); err != nil {
 		return nil, err
 	}
 	return info, nil
