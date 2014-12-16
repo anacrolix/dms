@@ -225,7 +225,13 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				}
 			}
 			totalMatches := len(objs)
-			objs = objs[browse.StartingIndex:]
+			objs = objs[func() (low int) {
+				low = browse.StartingIndex
+				if low > len(objs) {
+					low = len(objs)
+				}
+				return
+			}():]
 			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
 				objs = objs[:browse.RequestedCount]
 			}
