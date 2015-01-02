@@ -139,6 +139,9 @@ func (me *Server) serveHTTP() error {
 	}
 }
 
+// An interface with these flags should be valid for SSDP.
+const ssdpInterfaceFlags = net.FlagUp | net.FlagMulticast
+
 func (me *Server) doSSDP() {
 	active := 0
 	stopped := make(chan struct{})
@@ -157,7 +160,9 @@ func (me *Server) doSSDP() {
 		active++
 		go func(if_ net.Interface) {
 			if err := s.Init(); err != nil {
-				log.Println(if_.Name, err)
+				if if_.Flags&ssdpInterfaceFlags == ssdpInterfaceFlags {
+					log.Printf("error creating ssdp server on %s: %s", if_.Name, err)
+				}
 			} else {
 				log.Println("started SSDP on", if_.Name)
 				sStopped := make(chan struct{})
