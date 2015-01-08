@@ -3,7 +3,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"net"
 )
 
@@ -13,20 +13,20 @@ func main() {
 		panic(err)
 	}
 	for _, if_ := range ifs {
-		log.Println(if_)
+		fmt.Printf("%#v\n", if_)
 		addrs, err := if_.Addrs()
 		if err != nil {
 			panic(err)
 		}
 		for _, addr := range addrs {
-			log.Printf("\t%s %s\n", addr.Network(), addr)
+			fmt.Printf("\t%s %s\n", addr.Network(), addr)
 		}
 		mcastAddrs, err := if_.MulticastAddrs()
 		if err != nil {
 			panic(err)
 		}
 		for _, addr := range mcastAddrs {
-			log.Printf("\t%s\n", addr)
+			fmt.Printf("\t%s\n", addr)
 		}
 	}
 }
