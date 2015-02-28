@@ -49,9 +49,9 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		return nil
 	}
 	entryFilePath := cdsObject.FilePath()
-	mimeType := mimeTypeByPath(entryFilePath)
+	mimeType := MimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
-	if !mimeTypeType.IsMedia() {
+	if !mimeType.IsMedia() {
 		return nil
 	}
 	iconURI := (&url.URL{

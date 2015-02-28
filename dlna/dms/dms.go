@@ -258,11 +258,25 @@ func itemExtra(item *upnpav.Object, info *ffmpeg.Info) {
 	}
 }
 
+func init() {
+	if err := mime.AddExtensionType(".rmvb", "application/vnd.rn-realmedia-vbr"); err != nil {
+		panic(err)
+	}
+}
+
 // Example: "video/mpeg"
 type mimeType string
 
+func (me mimeType) IsMedia() bool {
+	if me == "application/vnd.rn-realmedia-vbr" {
+		return true
+	}
+	return me.Type().IsMedia()
+}
+
 // Attempts to guess mime type by peeling off extensions, such as those given
-// to incomplete files.
+// to incomplete files. TODO: This function may be misleading, since it
+// ignores non-media mime-types in processing.
 func mimeTypeByBaseName(name string) mimeType {
 	for name != "" {
 		ext := strings.ToLower(path.Ext(name))
@@ -270,7 +284,7 @@ func mimeTypeByBaseName(name string) mimeType {
 			break
 		}
 		ret := mimeType(mime.TypeByExtension(ext))
-		if ret.Type().IsMedia() {
+		if ret.IsMedia() {
 			return ret
 		}
 		switch ext {
@@ -287,7 +301,7 @@ func mimeTypeByBaseName(name string) mimeType {
 }
 
 // Used to determine the MIME-type for the given path
-func mimeTypeByPath(path_ string) (ret mimeType) {
+func MimeTypeByPath(path_ string) (ret mimeType) {
 	defer func() {
 		if ret == "video/x-msvideo" {
 			ret = "video/avi"
