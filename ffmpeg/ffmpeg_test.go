@@ -1,9 +1,8 @@
 package ffmpeg
 
 import (
-	"time"
-
 	"testing"
+	"time"
 )
 
 func TestInfoHelperMethods(t *testing.T) {

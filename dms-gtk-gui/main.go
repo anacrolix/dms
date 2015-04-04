@@ -1,12 +1,14 @@
 package main
 
 import (
-	"bitbucket.org/anacrolix/dms/dlna/dms"
-	"github.com/mattn/go-gtk/gdk"
-	"github.com/mattn/go-gtk/gtk"
 	"log"
 	"os"
 	"runtime"
+
+	"github.com/mattn/go-gtk/gdk"
+	"github.com/mattn/go-gtk/gtk"
+
+	"bitbucket.org/anacrolix/dms/dlna/dms"
 )
 
 func main() {

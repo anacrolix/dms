@@ -2,8 +2,9 @@
 package futures
 
 import (
-	"bitbucket.org/anacrolix/dms/queue"
 	"sync"
+
+	"bitbucket.org/anacrolix/dms/queue"
 )
 
 // Maintains the pool of workers and receives new work.

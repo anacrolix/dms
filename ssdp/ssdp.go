@@ -3,7 +3,6 @@ package ssdp
 import (
 	"bufio"
 	"bytes"
-	"golang.org/x/net/ipv4"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/ipv4"
 )
 
 const (
