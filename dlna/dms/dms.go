@@ -147,44 +147,60 @@ func (me *Server) doSSDP() {
 	active := 0
 	stopped := make(chan struct{})
 	for _, if_ := range me.Interfaces {
-		s := ssdp.Server{
-			Interface: if_,
-			Devices:   devices(),
-			Services:  serviceTypes(),
-			Location: func(ip net.IP) string {
-				return me.location(ip)
-			},
-			Server:         serverField,
-			UUID:           me.rootDeviceUUID,
-			NotifyInterval: 30,
-		}
 		active++
 		go func(if_ net.Interface) {
-			if err := s.Init(); err != nil {
-				if if_.Flags&ssdpInterfaceFlags == ssdpInterfaceFlags {
-					log.Printf("error creating ssdp server on %s: %s", if_.Name, err)
-				}
-			} else {
-				log.Println("started SSDP on", if_.Name)
-				sStopped := make(chan struct{})
-				go func() {
-					if err := s.Serve(); err != nil {
-						log.Printf("%q: %q\n", if_.Name, err)
-					}
-					close(sStopped)
-				}()
-				select {
-				case <-me.closed:
-				case <-sStopped:
-				}
-				s.Close()
-			}
-			stopped <- struct{}{}
+			defer func() {
+				stopped <- struct{}{}
+			}()
+			me.ssdpInterface(if_)
 		}(if_)
 	}
 	for active > 0 {
 		<-stopped
 		active--
+	}
+}
+
+// Run SSDP server on an interface.
+func (me *Server) ssdpInterface(if_ net.Interface) {
+	s := ssdp.Server{
+		Interface: if_,
+		Devices:   devices(),
+		Services:  serviceTypes(),
+		Location: func(ip net.IP) string {
+			return me.location(ip)
+		},
+		Server:         serverField,
+		UUID:           me.rootDeviceUUID,
+		NotifyInterval: 5,
+	}
+	if err := s.Init(); err != nil {
+		if if_.Flags&ssdpInterfaceFlags != ssdpInterfaceFlags {
+			// Didn't expect it to work anyway.
+			return
+		}
+		if strings.Contains(err.Error(), "listen") {
+			// OSX has a lot of dud interfaces. Failure to create a socket on
+			// the interface are what we're expecting if the interface is no
+			// good.
+			return
+		}
+		log.Printf("error creating ssdp server on %s: %s", if_.Name, err)
+		return
+	}
+	defer s.Close()
+	log.Println("started SSDP on", if_.Name)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		if err := s.Serve(); err != nil {
+			log.Printf("%q: %q\n", if_.Name, err)
+		}
+	}()
+	select {
+	case <-me.closed:
+		// Returning will close the server.
+	case <-stopped:
 	}
 }
 
