@@ -138,3 +138,7 @@ type StateVariable struct {
 	DataType      string    `xml:"dataType"`
 	AllowedValues *[]string `xml:"allowedValueList>allowedValue,omitempty"`
 }
+
+func FormatUUID(buf []byte) string {
+	return fmt.Sprintf("uuid:%x-%x-%x-%x-%x", buf[:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
+}

@@ -64,7 +64,7 @@ func makeDeviceUuid(unique string) string {
 		panic(err)
 	}
 	buf := h.Sum(nil)
-	return fmt.Sprintf("uuid:%x-%x-%x-%x-%x", buf[:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
+	return upnp.FormatUUID(buf)
 }
 
 // Groups the service definition with its XML description.
@@ -82,13 +82,14 @@ var services = []*service{
 			EventSubURL: contentDirectoryEventSubURL,
 		},
 		SCPD: contentDirectoryServiceDescription,
-		// }, {
-		// 	Service: upnp.Service{
-		// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:3",
-		// 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-		// 	},
-		// 	SCPD: connectionManagerServiceDesc,
 	},
+	// {
+	// 	Service: upnp.Service{
+	// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:3",
+	// 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+	// 	},
+	// 	SCPD: connectionManagerServiceDesc,
+	// },
 }
 
 // The control URL for every service is the same. We're able to infer the desired service from the request headers.
@@ -203,9 +204,10 @@ type Server struct {
 	closed         chan struct{}
 	ssdpStopped    chan struct{}
 	// The service SOAP handler keyed by service URN.
-	services    map[string]UPnPService
-	LogHeaders  bool
-	NoTranscode bool // Disable transcoding, and the resource elements implied in the CDS.
+	services   map[string]UPnPService
+	LogHeaders bool
+	// Disable transcoding, and the resource elements implied in the CDS.
+	NoTranscode bool
 }
 
 // UPnP SOAP service.

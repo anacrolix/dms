@@ -67,16 +67,12 @@ A_ARG_TYPE_ConnectionID
         <argument>
           <name>AVTransportID</name>
           <direction>out</direction>
-          <relatedStateVariable>
-A_ARG_TYPE_AVTransportID
-</relatedStateVariable>
+          <relatedStateVariable>A_ARG_TYPE_AVTransportID</relatedStateVariable>
         </argument>
         <argument>
           <name>RcsID</name>
           <direction>out</direction>
-          <relatedStateVariable>
-A_ARG_TYPE_RcsID
-</relatedStateVariable>
+          <relatedStateVariable>A_ARG_TYPE_RcsID</relatedStateVariable>
         </argument>
       </argumentList>
     </action>
@@ -86,9 +82,7 @@ A_ARG_TYPE_RcsID
         <argument>
           <name>ConnectionID</name>
           <direction>in</direction>
-          <relatedStateVariable>
-A_ARG_TYPE_ConnectionID
-</relatedStateVariable>
+          <relatedStateVariable>A_ARG_TYPE_ConnectionID</relatedStateVariable>
         </argument>
       </argumentList>
     </action>
