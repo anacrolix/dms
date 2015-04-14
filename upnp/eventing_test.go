@@ -26,6 +26,7 @@ func TestMarshalPropertySet(t *testing.T) {
 				},
 			},
 		},
+		Space: "urn:schemas-upnp-org:event-1-0",
 	}, "", "  ")
 	t.Log("\n" + string(b))
 	if err != nil {

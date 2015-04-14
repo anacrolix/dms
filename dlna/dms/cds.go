@@ -23,6 +23,7 @@ import (
 
 type contentDirectoryService struct {
 	*Server
+	upnp.Eventing
 }
 
 // Turns the given entry and DMS host into a UPnP object. A nil object is
@@ -274,8 +275,10 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 		return map[string]string{
 			"SearchCaps": "",
 		}, nil
+	default:
+		log.Println("unhandled CDS action:", action)
+		return nil, &upnp.InvalidActionError
 	}
-	return nil, &upnp.InvalidActionError
 }
 
 // Represents a ContentDirectory object.

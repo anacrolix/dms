@@ -11,16 +11,26 @@ import (
 	"time"
 )
 
+// TODO: Why use namespace prefixes in PropertySet et al? Because the spec
+// uses them, and I believe the Golang standard library XML spec implementers
+// incorrectly assume that you can get away with just xmlns="".
+
+// propertyset is the root element sent in an event callback.
 type PropertySet struct {
-	XMLName    struct{} `xml:"urn:schemas-upnp-org:event-1-0 propertyset"`
+	XMLName    struct{} `xml:"e:propertyset"`
 	Properties []Property
+	// This should be set to `"urn:schemas-upnp-org:event-1-0"`.
+	Space string `xml:"xmlns:e,attr"`
 }
 
+// propertys provide namespacing to the contained variables.
 type Property struct {
-	XMLName  struct{} `xml:"urn:schemas-upnp-org:event-1-0 property"`
+	XMLName  struct{} `xml:"e:property"`
 	Variable Variable
 }
 
+// Represents an evented state variable that has sendEvents="yes" in its
+// service spec.
 type Variable struct {
 	XMLName xml.Name
 	Value   string `xml:",chardata"`
@@ -33,6 +43,8 @@ type subscriber struct {
 	expiry  time.Time
 }
 
+// Intended to eventually be an embeddable implementation for managing
+// eventing for a service. Not complete.
 type Eventing struct {
 	subscribers map[string]*subscriber
 }
@@ -64,6 +76,8 @@ func (me *Eventing) Unsubscribe(sid string) error {
 
 var callbackURLRegexp = regexp.MustCompile("<(.*?)>")
 
+// Parse the CALLBACK HTTP header in an event subscription request. See UPnP
+// Device Architecture 4.1.2.
 func ParseCallbackURLs(callback string) (ret []*url.URL) {
 	for _, match := range callbackURLRegexp.FindAllStringSubmatch(callback, -1) {
 		_url, err := url.Parse(match[1])
