@@ -1,6 +1,9 @@
 package main
 
+//go:generate go-bindata data/
+
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"io/ioutil"
@@ -153,6 +156,22 @@ func main() {
 		FFProbeCache:   cache,
 		LogHeaders:     config.LogHeaders,
 		NoTranscode:    config.NoTranscode,
+		Icons: []dms.Icon{
+			dms.Icon{
+				Width:      48,
+				Height:     48,
+				Depth:      8,
+				Mimetype:   "image/png",
+				ReadSeeker: bytes.NewReader(MustAsset("data/VGC Sonic.png")),
+			},
+			dms.Icon{
+				Width:      128,
+				Height:     128,
+				Depth:      8,
+				Mimetype:   "image/png",
+				ReadSeeker: bytes.NewReader(MustAsset("data/VGC Sonic 128.png")),
+			},
+		},
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {

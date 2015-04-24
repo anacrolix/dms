@@ -41,6 +41,7 @@ const (
 	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	serviceControlURL           = "/ctl"
+	deviceIconPath              = "/deviceIcon"
 )
 
 type transcodeSpec struct {
@@ -209,6 +210,12 @@ var (
 	startTime time.Time
 )
 
+type Icon struct {
+	Width, Height, Depth int
+	Mimetype             string
+	io.ReadSeeker
+}
+
 type Server struct {
 	HTTPConn       net.Listener
 	FriendlyName   string
@@ -225,6 +232,7 @@ type Server struct {
 	LogHeaders bool
 	// Disable transcoding, and the resource elements implied in the CDS.
 	NoTranscode bool
+	Icons       []Icon
 }
 
 // UPnP SOAP service.
@@ -782,6 +790,11 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	handleSCPDs(mux)
 	mux.HandleFunc(serviceControlURL, server.serviceControlHandler)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	for i, di := range server.Icons {
+		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i), func(w http.ResponseWriter, r *http.Request) {
+			http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
+		})
+	}
 }
 
 func (s *Server) initServices() {
@@ -831,6 +844,18 @@ func (srv *Server) Serve() (err error) {
 				ServiceList: func() (ss []upnp.Service) {
 					for _, s := range services {
 						ss = append(ss, s.Service)
+					}
+					return
+				}(),
+				IconList: func() (ret []upnp.Icon) {
+					for i, di := range srv.Icons {
+						ret = append(ret, upnp.Icon{
+							Height:   di.Height,
+							Width:    di.Width,
+							Depth:    di.Depth,
+							Mimetype: di.Mimetype,
+							URL:      fmt.Sprintf("%s/%d", deviceIconPath, i),
+						})
 					}
 					return
 				}(),

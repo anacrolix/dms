@@ -63,8 +63,12 @@ type SpecVersion struct {
 	Minor int `xml:"minor"`
 }
 
-type icon struct {
-	Mimetype, Width, Height, Depth, URL string
+type Icon struct {
+	Mimetype string `xml:"mimetype"`
+	Width    int    `xml:"width"`
+	Height   int    `xml:"height"`
+	Depth    int    `xml:"depth"`
+	URL      string `xml:"url"`
 }
 
 type Service struct {
@@ -82,7 +86,7 @@ type Device struct {
 	Manufacturer string `xml:"manufacturer"`
 	ModelName    string `xml:"modelName"`
 	UDN          string
-	IconList     []icon
+	IconList     []Icon    `xml:"iconList>icon"`
 	ServiceList  []Service `xml:"serviceList>service"`
 }
 
