@@ -1,6 +1,8 @@
 package dms
 
 import (
+	"bytes"
+	"net/http"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -33,4 +35,24 @@ func TestSafeFilePath(t *testing.T) {
 			t.Fatalf("expected %q from %q and %q but got %q", e, _case.root, _case.given, a)
 		}
 	}
+}
+
+func TestRequest(t *testing.T) {
+	resp, err := http.NewRequest("NOTIFY", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf := bytes.NewBuffer(nil)
+	resp.Write(buf)
+	t.Logf("%q", buf.String())
+}
+
+func TestResponse(t *testing.T) {
+	var resp http.Response
+	resp.StatusCode = http.StatusOK
+	resp.Header = make(http.Header)
+	resp.Header["SID"] = []string{"uuid:1337"}
+	var buf bytes.Buffer
+	resp.Write(&buf)
+	t.Logf("%q", buf.String())
 }
