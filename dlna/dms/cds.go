@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"bitbucket.org/anacrolix/dms/dlna"
 	"bitbucket.org/anacrolix/dms/ffmpeg"
@@ -24,6 +23,10 @@ import (
 type contentDirectoryService struct {
 	*Server
 	upnp.Eventing
+}
+
+func (cds *contentDirectoryService) updateIDString() string {
+	return fmt.Sprintf("%d", uint32(os.Getpid()))
 }
 
 // Turns the given entry and DMS host into a UPnP object. A nil object is
@@ -196,7 +199,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 	switch action {
 	case "GetSystemUpdateID":
 		return map[string]string{
-			"Id": fmt.Sprintf("%d", uint32(os.Getpid())),
+			"Id": me.updateIDString(),
 		}, nil
 	case "GetSortCapabilities":
 		return map[string]string{
@@ -243,7 +246,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				"TotalMatches":   fmt.Sprint(totalMatches),
 				"NumberReturned": fmt.Sprint(len(objs)),
 				"Result":         didl_lite(string(result)),
-				"UpdateID":       fmt.Sprintf("%d", uint32(time.Now().Unix())),
+				"UpdateID":       me.updateIDString(),
 			}, nil
 		case "BrowseMetadata":
 			fileInfo, err := os.Stat(obj.FilePath())
@@ -263,7 +266,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 					}
 					return string(buf)
 				}()),
-				"UpdateID": fmt.Sprintf("%d", uint32(time.Now().Unix())),
+				"UpdateID": me.updateIDString(),
 			}, nil
 		default:
 			return nil, &upnp.Error{
