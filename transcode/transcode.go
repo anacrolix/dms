@@ -133,7 +133,7 @@ func ChromecastTranscode(path string, start, length time.Duration, stderr io.Wri
 		}...)
 	}
 	args = append(args, []string{
-		"-f", "matroska",
+		"-f", "mp4",
 		"pipe:"}...)
 	return transcodePipe(args, stderr)
 }
