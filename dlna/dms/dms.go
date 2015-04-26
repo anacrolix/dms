@@ -646,6 +646,117 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
 }
 
+var timeoutSocketBelt = newSemabelt(100)
+
+func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
+	body, err := xml.Marshal(upnp.PropertySet{
+		Properties: []upnp.Property{
+			upnp.Property{
+				Variable: upnp.Variable{
+					XMLName: xml.Name{
+						Local: "SystemUpdateID",
+					},
+					Value: "0",
+				},
+			},
+			// upnp.Property{
+			// 	Variable: upnp.Variable{
+			// 		XMLName: xml.Name{
+			// 			Local: "ContainerUpdateIDs",
+			// 		},
+			// 	},
+			// },
+			// upnp.Property{
+			// 	Variable: upnp.Variable{
+			// 		XMLName: xml.Name{
+			// 			Local: "TransferIDs",
+			// 		},
+			// 	},
+			// },
+		},
+		Space: "urn:schemas-upnp-org:event-1-0",
+	})
+	if err != nil {
+		panic(err)
+	}
+	body = append([]byte(`<?xml version="1.0"?>`+"\n"), body...)
+	log.Print(string(body))
+	for _, _url := range urls {
+		bodyReader := bytes.NewReader(body)
+		req, err := http.NewRequest("NOTIFY", _url.String(), bodyReader)
+		if err != nil {
+			panic(err)
+		}
+		req.Header["CONTENT-TYPE"] = []string{`text/xml; charset="utf-8"`}
+		req.Header["NT"] = []string{"upnp:event"}
+		req.Header["NTS"] = []string{"upnp:propchange"}
+		req.Header["SID"] = []string{sid}
+		req.Header["SEQ"] = []string{"0"}
+		// req.Header["TRANSFER-ENCODING"] = []string{"chunked"}
+		// req.ContentLength = int64(bodyReader.Len())
+		log.Print(req.Header)
+		log.Print("starting notify")
+		resp, err := http.DefaultClient.Do(req)
+		log.Print("finished notify")
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		log.Print(resp)
+		b, _ := ioutil.ReadAll(resp.Body)
+		log.Println(string(b))
+		resp.Body.Close()
+	}
+}
+
+func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *http.Request) {
+	if r.UserAgent() == "" && true {
+		// This should block forever. Clearly it's a minor resource leak,
+		// since the underlying transport should expire eventually. I have
+		// an (LG?) TV that doesn't provide a User-Agent in this request
+		// that will refuse to operate correctly with any eventing I've
+		// implemented. Returning unimplemented (501?) errors, results in
+		// repeat subscribe attempts which hits some kind of error count
+		// limit on the TV causing it to forcefully disconnect. It also
+		// won't work if the CDS service doesn't include an EventSubURL.
+		// The best thing I can do is cause every attempt to subscribe to
+		// timeout on the TV end, which reduces the error rate enough that
+		// the TV continues to operate without eventing.
+		//
+		// TODO: Stall the underlying connection until it drops without
+		// stalling the entire goroutine indefinitely, get eventing to
+		// work with the problematic TV.
+		timeoutSocketBelt.Ride()
+		return
+	}
+	// The following code is a work in progress. It partially implements
+	// the spec on eventing but hasn't been completed as I have nothing to
+	// test it with.
+	log.Print(r.Header)
+	service := server.services["ContentDirectory"]
+	log.Println(r.RemoteAddr, r.Method, r.Header.Get("SID"))
+	if r.Method == "SUBSCRIBE" && r.Header.Get("SID") == "" {
+		urls := upnp.ParseCallbackURLs(r.Header.Get("CALLBACK"))
+		log.Println(urls)
+		var timeout int
+		fmt.Sscanf(r.Header.Get("TIMEOUT"), "Second-%d", &timeout)
+		log.Println(timeout, r.Header.Get("TIMEOUT"))
+		sid, timeout, _ := service.Subscribe(urls, timeout)
+		w.Header()["SID"] = []string{sid}
+		w.Header()["TIMEOUT"] = []string{fmt.Sprintf("Second-%d", timeout)}
+		// TODO: Shouldn't have to do this to get headers logged.
+		w.WriteHeader(http.StatusOK)
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			server.contentDirectoryInitialEvent(urls, sid)
+		}()
+	} else if r.Method == "SUBSCRIBE" {
+		http.Error(w, "meh", http.StatusPreconditionFailed)
+	} else {
+		log.Print("unhandled event")
+	}
+}
+
 func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("content-type", "text/html")
@@ -660,108 +771,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			log.Println(err)
 		}
 	})
-	mux.HandleFunc(contentDirectoryEventSubURL, func(w http.ResponseWriter, r *http.Request) {
-		if r.UserAgent() == "" {
-			// This should block forever. Clearly it's a minor resource leak,
-			// since the underlying transport should expire eventually. I have
-			// an (LG?) TV that doesn't provide a User-Agent in this request
-			// that will refuse to operate correctly with any eventing I've
-			// implemented. Returning unimplemented (501?) errors, results in
-			// repeat subscribe attempts which hits some kind of error count
-			// limit on the TV causing it to forcefully disconnect. It also
-			// won't work if the CDS service doesn't include an EventSubURL.
-			// The best thing I can do is cause every attempt to subscribe to
-			// timeout on the TV end, which reduces the error rate enough that
-			// the TV continues to operate without eventing.
-			//
-			// TODO: Stall the underlying connection until it drops without
-			// stalling the entire goroutine indefinitely, get eventing to
-			// work with the problematic TV.
-			select {}
-			return
-		}
-		// The following code is a work in progress. It partially implements
-		// the spec on eventing but hasn't been completed as I have nothing to
-		// test it with.
-		log.Print(r.Header)
-		service := server.services["ContentDirectory"]
-		log.Println(r.RemoteAddr, r.Method, r.Header.Get("SID"))
-		if r.Method == "SUBSCRIBE" && r.Header.Get("SID") == "" {
-			urls := upnp.ParseCallbackURLs(r.Header.Get("CALLBACK"))
-			log.Println(urls)
-			var timeout int
-			fmt.Sscanf(r.Header.Get("TIMEOUT"), "Second-%d", &timeout)
-			log.Println(timeout, r.Header.Get("TIMEOUT"))
-			sid, timeout, _ := service.Subscribe(urls, timeout)
-			w.Header().Set("SID", sid)
-			w.Header().Set("CONTENT-LENGTH", "0")
-			w.Header().Set("TIMEOUT", fmt.Sprintf("Second-%d", timeout))
-			// TODO: Shouldn't have to do this to get headers logged.
-			w.WriteHeader(200)
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				for _, _url := range urls {
-					body, err := xml.Marshal(upnp.PropertySet{
-						Properties: []upnp.Property{
-							upnp.Property{
-								Variable: upnp.Variable{
-									XMLName: xml.Name{
-										Local: "SystemUpdateID",
-									},
-									Value: fmt.Sprintf("%d", uint32(os.Getpid())),
-								},
-							},
-							upnp.Property{
-								Variable: upnp.Variable{
-									XMLName: xml.Name{
-										Local: "ContainerUpdateIDs",
-									},
-								},
-							},
-							upnp.Property{
-								Variable: upnp.Variable{
-									XMLName: xml.Name{
-										Local: "TransferIDs",
-									},
-								},
-							},
-						},
-						Space: "urn:schemas-upnp-org:event-1-0",
-					})
-					if err != nil {
-						panic(err)
-					}
-					body = append([]byte(`<?xml version="1.0"?>`), body...)
-					log.Print(string(body))
-					bodyReader := bytes.NewReader(body)
-					req, err := http.NewRequest("NOTIFY", _url.String(), bodyReader)
-					if err != nil {
-						panic(err)
-					}
-					req.Header.Set("CONTENT-TYPE", `text/xml; charset="utf-8"`)
-					req.Header.Set("NT", "upnp:event")
-					req.Header.Set("NTS", "upnp:propchange")
-					req.Header.Set("SID", sid)
-					req.Header.Set("SEQ", "0")
-					req.Header.Set("connection", "keep-alive")
-					req.ContentLength = int64(bodyReader.Len())
-					resp, err := http.DefaultClient.Do(req)
-					if err != nil {
-						log.Print(err)
-						continue
-					}
-					log.Print(resp)
-					b, _ := ioutil.ReadAll(resp.Body)
-					log.Print(string(b))
-					resp.Body.Close()
-				}
-			}()
-		} else if r.Method == "SUBSCRIBE" {
-			http.Error(w, "meh", http.StatusPreconditionFailed)
-		} else {
-			log.Print("unhandled event")
-		}
-	})
+	mux.HandleFunc(contentDirectoryEventSubURL, server.contentDirectoryEventSubHandler)
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		filePath := server.filePath(r.URL.Query().Get("path"))
