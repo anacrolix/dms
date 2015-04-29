@@ -3,10 +3,11 @@
 package main
 
 import (
-	"bitbucket.org/anacrolix/dms/ffmpeg"
 	"flag"
 	"fmt"
 	"log"
+
+	"github.com/anacrolix/dms/ffmpeg"
 )
 
 func main() {

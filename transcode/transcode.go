@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"bitbucket.org/anacrolix/dms/ffmpeg"
-	. "bitbucket.org/anacrolix/dms/misc"
+	"github.com/anacrolix/dms/ffmpeg"
+	. "github.com/anacrolix/dms/misc"
 )
 
 // Invokes an external command and returns a reader from its stdout. The

@@ -3,11 +3,12 @@
 package main
 
 import (
-	"bitbucket.org/anacrolix/dms/soap"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"os"
+
+	"github.com/anacrolix/dms/soap"
 )
 
 type Browse struct {

@@ -3,13 +3,14 @@
 package main
 
 import (
-	"bitbucket.org/anacrolix/dms/misc"
 	"bufio"
 	"flag"
 	"io"
 	"log"
 	"os"
 	"time"
+
+	"github.com/anacrolix/dms/misc"
 )
 
 func main() {

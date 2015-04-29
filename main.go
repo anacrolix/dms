@@ -17,8 +17,8 @@ import (
 	"sync"
 	"syscall"
 
-	"bitbucket.org/anacrolix/dms/dlna/dms"
-	"bitbucket.org/anacrolix/dms/rrcache"
+	"github.com/anacrolix/dms/dlna/dms"
+	"github.com/anacrolix/dms/rrcache"
 )
 
 type dmsConfig struct {

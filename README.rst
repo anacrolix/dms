@@ -17,7 +17,7 @@ Installing
 
 To run dms, assuming ``$GOPATH`` and Go have been configured already::
 
-    $ go get bitbucket.org/anacrolix/dms
+    $ go get github.com/anacrolix/dms
     $ $GOPATH/bin/dms
 
 Known Compatible Players and Renderers
