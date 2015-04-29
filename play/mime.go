@@ -3,9 +3,10 @@
 package main
 
 import (
-	"bitbucket.org/anacrolix/dms/dlna/dms"
 	"flag"
 	"fmt"
+
+	"github.com/anacrolix/dms/dlna/dms"
 )
 
 func main() {

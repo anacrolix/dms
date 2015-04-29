@@ -22,13 +22,13 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/anacrolix/dms/dlna"
-	"bitbucket.org/anacrolix/dms/ffmpeg"
-	"bitbucket.org/anacrolix/dms/soap"
-	"bitbucket.org/anacrolix/dms/ssdp"
-	"bitbucket.org/anacrolix/dms/transcode"
-	"bitbucket.org/anacrolix/dms/upnp"
-	"bitbucket.org/anacrolix/dms/upnpav"
+	"github.com/anacrolix/dms/dlna"
+	"github.com/anacrolix/dms/ffmpeg"
+	"github.com/anacrolix/dms/soap"
+	"github.com/anacrolix/dms/ssdp"
+	"github.com/anacrolix/dms/transcode"
+	"github.com/anacrolix/dms/upnp"
+	"github.com/anacrolix/dms/upnpav"
 )
 
 const (

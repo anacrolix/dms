@@ -3,10 +3,11 @@
 package main
 
 import (
-	"bitbucket.org/anacrolix/dms/upnp"
 	"encoding/xml"
 	"fmt"
 	"log"
+
+	"github.com/anacrolix/dms/upnp"
 )
 
 func main() {
