@@ -22,13 +22,14 @@ import (
 )
 
 type dmsConfig struct {
-	Path             string
-	IfName           string
-	Http             string
-	FriendlyName     string
-	LogHeaders       bool
-	FFprobeCachePath string
-	NoTranscode      bool
+	Path                string
+	IfName              string
+	Http                string
+	FriendlyName        string
+	LogHeaders          bool
+	FFprobeCachePath    string
+	NoTranscode         bool
+	StallEventSubscribe bool
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -102,6 +103,7 @@ func main() {
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
 	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
+	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
 
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -172,6 +174,7 @@ func main() {
 				ReadSeeker: bytes.NewReader(MustAsset("data/VGC Sonic 128.png")),
 			},
 		},
+		StallEventSubscribe: config.StallEventSubscribe,
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {

@@ -233,6 +233,9 @@ type Server struct {
 	// Disable transcoding, and the resource elements implied in the CDS.
 	NoTranscode bool
 	Icons       []Icon
+	// Stall event subscription requests until they drop. A workaround for
+	// some bad clients.
+	StallEventSubscribe bool
 }
 
 // UPnP SOAP service.
@@ -710,7 +713,6 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 }
 
 func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *http.Request) {
-	if r.UserAgent() == "" && true {
 		// This should block forever. Clearly it's a minor resource leak,
 		// since the underlying transport should expire eventually. I have
 		// an (LG?) TV that doesn't provide a User-Agent in this request
@@ -722,6 +724,7 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 		// The best thing I can do is cause every attempt to subscribe to
 		// timeout on the TV end, which reduces the error rate enough that
 		// the TV continues to operate without eventing.
+	if server.StallEventSubscribe {
 		//
 		// TODO: Stall the underlying connection until it drops without
 		// stalling the entire goroutine indefinitely, get eventing to
