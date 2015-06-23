@@ -13,8 +13,7 @@ dms advertises and serves the raw files, in addition to alternate transcoded
 streams when it's able, such as mpeg2 PAL-DVD and WebM for the Chromecast. It
 will also provide thumbnails where possible.
 
-dms uses ``ffprobe``/``avprobe`` to get media data such as bitrate and duration,
-and ``ffmpeg``/``avconv`` for video transoding.
+dms uses ``ffprobe``/``avprobe`` to get media data such as bitrate and duration, ``ffmpeg``/``avconv`` for video transoding, and ``ffmpegthumbnailer`` for generating thumbnails when browsing.
 
 .. image:: https://lh3.googleusercontent.com/-z-zh7AzObGo/UEiWni1cQPI/AAAAAAAAASI/DRw9IoMMiNs/w497-h373/2012%2B-%2B1
 
@@ -33,3 +32,4 @@ Known Compatible Players and Renderers
  * Android's BubbleUPnP and AirWire
  * Chromecast
  * VLC
+ * LG Smart TVs, with varying success.
