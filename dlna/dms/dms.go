@@ -551,6 +551,10 @@ func (me *mitmRespWriter) Write(b []byte) (int, error) {
 	return me.ResponseWriter.Write(b)
 }
 
+func (me *mitmRespWriter) CloseNotify() <-chan bool {
+	return me.ResponseWriter.(http.CloseNotifier).CloseNotify()
+}
+
 // Set the SCPD serve paths.
 func init() {
 	for _, s := range services {
@@ -715,23 +719,24 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 var eventingLogger = log.New(ioutil.Discard, "", 0)
 
 func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *http.Request) {
-		// This should block forever. Clearly it's a minor resource leak,
-		// since the underlying transport should expire eventually. I have
-		// an (LG?) TV that doesn't provide a User-Agent in this request
-		// that will refuse to operate correctly with any eventing I've
-		// implemented. Returning unimplemented (501?) errors, results in
-		// repeat subscribe attempts which hits some kind of error count
-		// limit on the TV causing it to forcefully disconnect. It also
-		// won't work if the CDS service doesn't include an EventSubURL.
-		// The best thing I can do is cause every attempt to subscribe to
-		// timeout on the TV end, which reduces the error rate enough that
-		// the TV continues to operate without eventing.
 	if server.StallEventSubscribe {
+		// I have an LG TV that doesn't like my eventing implementation.
+		// Returning unimplemented (501?) errors, results in repeat subscribe
+		// attempts which hits some kind of error count limit on the TV
+		// causing it to forcefully disconnect. It also won't work if the CDS
+		// service doesn't include an EventSubURL. The best thing I can do is
+		// cause every attempt to subscribe to timeout on the TV end, which
+		// reduces the error rate enough that the TV continues to operate
+		// without eventing.
 		//
-		// TODO: Stall the underlying connection until it drops without
-		// stalling the entire goroutine indefinitely, get eventing to
-		// work with the problematic TV.
-		timeoutSocketBelt.Ride()
+		// I've not found a reliable way to identify this TV, since it and
+		// others don't seem to include any client-identifying headers on
+		// SUBSCRIBE requests.
+		//
+		// TODO: Get eventing to work with the problematic TV.
+		t := time.Now()
+		<-w.(http.CloseNotifier).CloseNotify()
+		eventingLogger.Printf("stalled subscribe connection went away after %s", time.Since(t))
 		return
 	}
 	// The following code is a work in progress. It partially implements
