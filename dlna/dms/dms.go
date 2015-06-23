@@ -683,7 +683,7 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		panic(err)
 	}
 	body = append([]byte(`<?xml version="1.0"?>`+"\n"), body...)
-	log.Print(string(body))
+	eventingLogger.Print(string(body))
 	for _, _url := range urls {
 		bodyReader := bytes.NewReader(body)
 		req, err := http.NewRequest("NOTIFY", _url.String(), bodyReader)
@@ -697,20 +697,22 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		req.Header["SEQ"] = []string{"0"}
 		// req.Header["TRANSFER-ENCODING"] = []string{"chunked"}
 		// req.ContentLength = int64(bodyReader.Len())
-		log.Print(req.Header)
-		log.Print("starting notify")
+		eventingLogger.Print(req.Header)
+		eventingLogger.Print("starting notify")
 		resp, err := http.DefaultClient.Do(req)
-		log.Print("finished notify")
+		eventingLogger.Print("finished notify")
 		if err != nil {
 			log.Print(err)
 			continue
 		}
-		log.Print(resp)
+		eventingLogger.Print(resp)
 		b, _ := ioutil.ReadAll(resp.Body)
-		log.Println(string(b))
+		eventingLogger.Println(string(b))
 		resp.Body.Close()
 	}
 }
+
+var eventingLogger = log.New(ioutil.Discard, "", 0)
 
 func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *http.Request) {
 		// This should block forever. Clearly it's a minor resource leak,
@@ -735,15 +737,15 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 	// The following code is a work in progress. It partially implements
 	// the spec on eventing but hasn't been completed as I have nothing to
 	// test it with.
-	log.Print(r.Header)
+	eventingLogger.Print(r.Header)
 	service := server.services["ContentDirectory"]
-	log.Println(r.RemoteAddr, r.Method, r.Header.Get("SID"))
+	eventingLogger.Println(r.RemoteAddr, r.Method, r.Header.Get("SID"))
 	if r.Method == "SUBSCRIBE" && r.Header.Get("SID") == "" {
 		urls := upnp.ParseCallbackURLs(r.Header.Get("CALLBACK"))
-		log.Println(urls)
+		eventingLogger.Println(urls)
 		var timeout int
 		fmt.Sscanf(r.Header.Get("TIMEOUT"), "Second-%d", &timeout)
-		log.Println(timeout, r.Header.Get("TIMEOUT"))
+		eventingLogger.Println(timeout, r.Header.Get("TIMEOUT"))
 		sid, timeout, _ := service.Subscribe(urls, timeout)
 		w.Header()["SID"] = []string{sid}
 		w.Header()["TIMEOUT"] = []string{fmt.Sprintf("Second-%d", timeout)}
@@ -756,7 +758,7 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 	} else if r.Method == "SUBSCRIBE" {
 		http.Error(w, "meh", http.StatusPreconditionFailed)
 	} else {
-		log.Print("unhandled event")
+		eventingLogger.Printf("unhandled event method: %s", r.Method)
 	}
 }
 
