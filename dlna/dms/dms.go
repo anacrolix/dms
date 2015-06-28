@@ -294,6 +294,9 @@ func init() {
 	if err := mime.AddExtensionType(".rmvb", "application/vnd.rn-realmedia-vbr"); err != nil {
 		panic(err)
 	}
+	if err := mime.AddExtensionType(".ogv", "video/ogg"); err != nil {
+		panic(err)
+	}
 }
 
 // Example: "video/mpeg"
