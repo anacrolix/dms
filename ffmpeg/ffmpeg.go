@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"sync"
 	"time"
 )
 
@@ -96,46 +97,79 @@ func lastLine(r io.Reader, ch chan<- string) (err error) {
 		line = scanner.Text()
 	}
 	err = scanner.Err()
-	if err == nil {
-		ch <- line
+	if err != nil {
+		return
 	}
-	return err
+	ch <- line
+	return
 }
 
 // Runs ffprobe or avprobe or similar on the given file path.
 func Probe(path string) (info *Info, err error) {
+	pc, err := StartProbe(path)
+	if err != nil {
+		return
+	}
+	<-pc.Done
+	info, err = pc.Info, pc.Err
+	return
+}
+
+type ProbeCmd struct {
+	Cmd  *exec.Cmd
+	Done chan struct{}
+	mu   sync.Mutex
+	Info *Info
+	Err  error
+}
+
+func StartProbe(path string) (ret *ProbeCmd, err error) {
 	if ffprobePath == "" {
 		err = FfprobeUnavailableError
 		return
 	}
-	cmd := exec.Command(ffprobePath, "-loglevel", "error", "-show_format", "-show_streams", outputFormatFlag, "json", path)
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return
-	}
-	errPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return
-	}
+	cmd := exec.Command(ffprobePath,
+		"-loglevel", "error",
+		"-show_format",
+		"-show_streams",
+		outputFormatFlag, "json",
+		path)
 	setHideWindow(cmd)
-	if err := cmd.Start(); err != nil {
-		return nil, err
+	var stdout, stderr *io.PipeReader
+	stdout, cmd.Stdout = io.Pipe()
+	stderr, cmd.Stderr = io.Pipe()
+	err = cmd.Start()
+	if err != nil {
+		return
 	}
-	defer out.Close()
+	ret = &ProbeCmd{
+		Cmd:  cmd,
+		Done: make(chan struct{}),
+	}
 	lastLineCh := make(chan string, 1)
-	go lastLine(errPipe, lastLineCh)
-	defer func() {
-		waitErr := cmd.Wait()
-		if waitErr != nil {
-			err = waitErr
-			if lastLine, ok := <-lastLineCh; ok {
-				err = fmt.Errorf("%s: %s", err, lastLine)
-			}
+	ret.mu.Lock()
+	go func() {
+		defer close(ret.Done)
+		err := cmd.Wait()
+		stdout.Close()
+		stderr.Close()
+		ret.mu.Lock()
+		defer ret.mu.Unlock()
+		if err == nil {
+			return
 		}
+		lastLine, ok := <-lastLineCh
+		if ok {
+			err = fmt.Errorf("%s: %s", err, lastLine)
+		}
+		ret.Err = err
 	}()
-	decoder := json.NewDecoder(bufio.NewReader(out))
-	if err := decoder.Decode(&info); err != nil {
-		return nil, err
-	}
-	return info, nil
+	go lastLine(stderr, lastLineCh)
+	go func() {
+		decoder := json.NewDecoder(bufio.NewReader(stdout))
+		ret.Err = decoder.Decode(&ret.Info)
+		ret.mu.Unlock()
+		stdout.Close()
+	}()
+	return
 }
