@@ -31,7 +31,7 @@ func (info *Info) Bitrate() (bitrate uint, err error) {
 func (info *Info) Duration() (duration time.Duration, err error) {
 	di := info.Format["duration"]
 	if di == nil {
-		err = errors.New("no format duration")
+		err = errors.New("missing value")
 		return
 	}
 	ds := di.(string)
