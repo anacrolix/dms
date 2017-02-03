@@ -845,10 +845,18 @@ func (srv *Server) Serve() (err error) {
 		}
 	}
 	if srv.Interfaces == nil {
-		srv.Interfaces, err = net.Interfaces()
+		ifs, err := net.Interfaces()
 		if err != nil {
 			log.Print(err)
 		}
+		var tmp []net.Interface
+		for _, if_ := range ifs {
+			if if_.Flags&net.FlagUp == 0 || if_.MTU <= 0 {
+				continue
+			}
+			tmp = append(tmp, if_)
+		}
+		srv.Interfaces = tmp
 	}
 	if srv.FFProbeCache == nil {
 		srv.FFProbeCache = dummyFFProbeCache{}

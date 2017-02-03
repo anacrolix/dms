@@ -144,6 +144,14 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
+			var tmp []net.Interface
+			for _, if_ := range ifs {
+				if if_.Flags&net.FlagUp == 0 || if_.MTU <= 0 {
+					continue
+				}
+				tmp = append(tmp, if_)
+			}
+			ifs = tmp
 			return
 		}(config.IfName),
 		HTTPConn: func() net.Listener {
