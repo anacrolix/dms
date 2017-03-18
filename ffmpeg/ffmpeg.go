@@ -87,21 +87,36 @@ func init() {
 
 var FfprobeUnavailableError = errors.New("ffprobe not available")
 
-// Sends the last line from r to ch, or returns the error scanning r.
-func lastLine(r io.Reader, ch chan<- string) (err error) {
-	defer close(ch)
-	scanner := bufio.NewScanner(r)
-	scanner.Split(bufio.ScanLines)
-	var line string
-	for scanner.Scan() {
-		line = scanner.Text()
+// Returns the last line in r. ok is false if there are no lines. err is any
+// error that occurs during scanning.
+func lastLine(r io.Reader) (line string, ok bool, err error) {
+	s := bufio.NewScanner(r)
+	s.Split(bufio.ScanLines)
+	for s.Scan() {
+		line = s.Text()
+		ok = true
 	}
-	err = scanner.Err()
-	if err != nil {
-		return
-	}
-	ch <- line
+	err = s.Err()
 	return
+}
+
+// Returns a channel that receives the last line in r.
+func lastLineCh(r io.Reader) <-chan string {
+	ch := make(chan string, 1)
+	go func() {
+		defer close(ch)
+		line, ok, err := lastLine(r)
+		switch err {
+		case nil:
+		case io.ErrClosedPipe:
+		default:
+			panic(err)
+		}
+		if ok {
+			ch <- line
+		}
+	}()
+	return ch
 }
 
 // Runs ffprobe or avprobe or similar on the given file path.
@@ -121,6 +136,27 @@ type ProbeCmd struct {
 	mu   sync.Mutex
 	Info *Info
 	Err  error
+}
+
+func (me *ProbeCmd) runner(stdout, stderr io.ReadCloser) {
+	defer close(me.Done)
+	lastErrLineCh := lastLineCh(stderr)
+	d := json.NewDecoder(bufio.NewReader(stdout))
+	decodeErr := d.Decode(&me.Info)
+	stdout.Close()
+	waitErr := me.Cmd.Wait()
+	stderr.Close()
+	if waitErr == nil {
+		me.Err = decodeErr
+		return
+	}
+	lastErrLine, lastErrLineOk := <-lastErrLineCh
+	if lastErrLineOk {
+		me.Err = fmt.Errorf("%s: %s", waitErr, lastErrLine)
+	} else {
+		me.Err = waitErr
+	}
+	return
 }
 
 func StartProbe(path string) (ret *ProbeCmd, err error) {
@@ -146,30 +182,6 @@ func StartProbe(path string) (ret *ProbeCmd, err error) {
 		Cmd:  cmd,
 		Done: make(chan struct{}),
 	}
-	lastLineCh := make(chan string, 1)
-	ret.mu.Lock()
-	go func() {
-		defer close(ret.Done)
-		err := cmd.Wait()
-		stdout.Close()
-		stderr.Close()
-		ret.mu.Lock()
-		defer ret.mu.Unlock()
-		if err == nil {
-			return
-		}
-		lastLine, ok := <-lastLineCh
-		if ok {
-			err = fmt.Errorf("%s: %s", err, lastLine)
-		}
-		ret.Err = err
-	}()
-	go lastLine(stderr, lastLineCh)
-	go func() {
-		decoder := json.NewDecoder(bufio.NewReader(stdout))
-		ret.Err = decoder.Decode(&ret.Info)
-		ret.mu.Unlock()
-		stdout.Close()
-	}()
+	go ret.runner(stdout, stderr)
 	return
 }
