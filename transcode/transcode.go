@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/anacrolix/dms/ffmpeg"
 	. "github.com/anacrolix/dms/misc"
+	"github.com/anacrolix/ffprobe"
 )
 
 // Invokes an external command and returns a reader from its stdout. The
@@ -85,7 +85,7 @@ func Transcode(path string, start, length time.Duration, stderr io.Writer) (r io
 	args = append(args, []string{
 		"-i", path,
 	}...)
-	info, err := ffmpeg.Probe(path)
+	info, err := ffprobe.Run(path)
 	if err != nil {
 		return
 	}

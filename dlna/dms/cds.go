@@ -14,10 +14,10 @@ import (
 	"strings"
 
 	"github.com/anacrolix/dms/dlna"
-	"github.com/anacrolix/dms/ffmpeg"
 	"github.com/anacrolix/dms/misc"
 	"github.com/anacrolix/dms/upnp"
 	"github.com/anacrolix/dms/upnpav"
+	"github.com/anacrolix/ffprobe"
 )
 
 type contentDirectoryService struct {
@@ -83,7 +83,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 				resDuration = misc.FormatDurationSexagesimal(d)
 			}
 		}
-	case ffmpeg.FfprobeUnavailableError:
+	case ffprobe.FfprobeUnavailableError:
 	default:
 		log.Printf("error probing %s: %s", entryFilePath, probeErr)
 	}

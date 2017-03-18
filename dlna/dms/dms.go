@@ -23,12 +23,12 @@ import (
 	"time"
 
 	"github.com/anacrolix/dms/dlna"
-	"github.com/anacrolix/dms/ffmpeg"
 	"github.com/anacrolix/dms/soap"
 	"github.com/anacrolix/dms/ssdp"
 	"github.com/anacrolix/dms/transcode"
 	"github.com/anacrolix/dms/upnp"
 	"github.com/anacrolix/dms/upnpav"
+	"github.com/anacrolix/ffprobe"
 )
 
 const (
@@ -261,12 +261,12 @@ func (dummyFFProbeCache) Get(interface{}) (interface{}, bool) {
 // Public definition so that external modules can persist cache contents.
 type FfprobeCacheItem struct {
 	Key   ffmpegInfoCacheKey
-	Value *ffmpeg.Info
+	Value *ffprobe.Info
 }
 
 // update the UPnP object fields from ffprobe data
 // priority is given the format section, and then the streams sequentially
-func itemExtra(item *upnpav.Object, info *ffmpeg.Info) {
+func itemExtra(item *upnpav.Object, info *ffprobe.Info) {
 	setFromTags := func(m map[string]interface{}) {
 		for key, val := range m {
 			setIfUnset := func(s *string) {
@@ -937,7 +937,7 @@ func (me *Server) location(ip net.IP) string {
 }
 
 // Can return nil info with nil err if an earlier Probe gave an error.
-func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
+func (srv *Server) ffmpegProbe(path string) (info *ffprobe.Info, err error) {
 	// We don't want relative paths in the cache.
 	path, err = filepath.Abs(path)
 	if err != nil {
@@ -950,11 +950,11 @@ func (srv *Server) ffmpegProbe(path string) (info *ffmpeg.Info, err error) {
 	key := ffmpegInfoCacheKey{path, fi.ModTime().UnixNano()}
 	value, ok := srv.FFProbeCache.Get(key)
 	if !ok {
-		info, err = ffmpeg.Probe(path)
+		info, err = ffprobe.Run(path)
 		err = suppressFFmpegProbeDataErrors(err)
 		srv.FFProbeCache.Set(key, info)
 		return
 	}
-	info = value.(*ffmpeg.Info)
+	info = value.(*ffprobe.Info)
 	return
 }
