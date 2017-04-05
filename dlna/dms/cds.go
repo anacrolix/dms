@@ -83,7 +83,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 				resDuration = misc.FormatDurationSexagesimal(d)
 			}
 		}
-	case ffprobe.FfprobeUnavailableError:
+	case ffprobe.ExeNotFound:
 	default:
 		log.Printf("error probing %s: %s", entryFilePath, probeErr)
 	}
