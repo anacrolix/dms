@@ -1,8 +1,8 @@
 dms
 ===
 
-.. image:: https://codeship.com/projects/e0fc22e0-d084-0132-7215-42f608f62b99/status?branch=master
- :target: https://codeship.com/projects/77002
+.. image:: https://circleci.com/gh/anacrolix/dms.svg?style=svg
+    :target: https://circleci.com/gh/anacrolix/dms
 
 dms is a UPnP DLNA Digital Media Server. It runs from the terminal, and serves
 content directly from the filesystem from the working directory, or the path
