@@ -656,8 +656,6 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
 }
 
-var timeoutSocketBelt = newSemabelt(100)
-
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
 	body, err := xml.Marshal(upnp.PropertySet{
 		Properties: []upnp.Property{
