@@ -29,6 +29,7 @@ type dmsConfig struct {
 	LogHeaders          bool
 	FFprobeCachePath    string
 	NoTranscode         bool
+	NoProbe             bool
 	StallEventSubscribe bool
 }
 
@@ -103,6 +104,7 @@ func main() {
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
 	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
+	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
 	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
 
 	flag.Parse()
@@ -166,6 +168,7 @@ func main() {
 		FFProbeCache:   cache,
 		LogHeaders:     config.LogHeaders,
 		NoTranscode:    config.NoTranscode,
+		NoProbe:        config.NoProbe,
 		Icons: []dms.Icon{
 			dms.Icon{
 				Width:      48,
