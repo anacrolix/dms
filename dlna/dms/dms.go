@@ -232,6 +232,8 @@ type Server struct {
 	LogHeaders bool
 	// Disable transcoding, and the resource elements implied in the CDS.
 	NoTranscode bool
+	// Disable media probing with ffprobe
+	NoProbe     bool
 	Icons       []Icon
 	// Stall event subscription requests until they drop. A workaround for
 	// some bad clients.
