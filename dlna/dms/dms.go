@@ -233,13 +233,17 @@ type Server struct {
 	// Disable transcoding, and the resource elements implied in the CDS.
 	NoTranscode bool
 	// Disable media probing with ffprobe
-	NoProbe     bool
-	Icons       []Icon
+	NoProbe bool
+	Icons   []Icon
 	// Stall event subscription requests until they drop. A workaround for
 	// some bad clients.
 	StallEventSubscribe bool
 	// Time interval between SSPD announces
 	NotifyInterval time.Duration
+	// Ignore hidden files and directories
+	IgnoreHidden bool
+	// Ingnore unreadable files and directories
+	IgnoreUnreadable bool
 }
 
 // UPnP SOAP service.

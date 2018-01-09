@@ -33,6 +33,8 @@ type dmsConfig struct {
 	NoProbe             bool
 	StallEventSubscribe bool
 	NotifyInterval      time.Duration
+	IgnoreHidden        bool
+	IgnoreUnreadable    bool
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -109,6 +111,8 @@ func main() {
 	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
 	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
 	flag.DurationVar(&config.NotifyInterval, "notifyInterval", 30*time.Second, "interval between SSPD announces")
+	flag.BoolVar(&config.IgnoreHidden, "ignoreHidden", false, "ignore hidden files and directories")
+	flag.BoolVar(&config.IgnoreUnreadable, "ignoreUnreadable", false, "ignore unreadable files and directories")
 
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -190,6 +194,8 @@ func main() {
 		},
 		StallEventSubscribe: config.StallEventSubscribe,
 		NotifyInterval:      config.NotifyInterval,
+		IgnoreHidden:        config.IgnoreHidden,
+		IgnoreUnreadable:    config.IgnoreUnreadable,
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {
