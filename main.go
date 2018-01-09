@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/anacrolix/dms/dlna/dms"
 	"github.com/anacrolix/dms/rrcache"
@@ -31,6 +32,7 @@ type dmsConfig struct {
 	NoTranscode         bool
 	NoProbe             bool
 	StallEventSubscribe bool
+	NotifyInterval      time.Duration
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -106,6 +108,7 @@ func main() {
 	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
 	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
 	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
+	flag.DurationVar(&config.NotifyInterval, "notifyInterval", 30*time.Second, "interval between SSPD announces")
 
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -186,6 +189,7 @@ func main() {
 			},
 		},
 		StallEventSubscribe: config.StallEventSubscribe,
+		NotifyInterval:      config.NotifyInterval,
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {

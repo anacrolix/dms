@@ -87,7 +87,7 @@ type Server struct {
 	Devices        []string
 	Location       func(net.IP) string
 	UUID           string
-	NotifyInterval uint
+	NotifyInterval time.Duration
 	closed         chan struct{}
 }
 
@@ -153,12 +153,12 @@ func (me *Server) Serve() (err error) {
 				panic(fmt.Sprint("unexpected addr type:", addr))
 			}()
 			extraHdrs := [][2]string{
-				{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2)},
+				{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2/time.Second)},
 				{"LOCATION", me.Location(ip)},
 			}
 			me.notifyAll(aliveNTS, extraHdrs)
 		}
-		time.Sleep(time.Duration(me.NotifyInterval) * time.Second)
+		time.Sleep(me.NotifyInterval)
 	}
 }
 
@@ -326,7 +326,7 @@ func (me *Server) makeResponse(ip net.IP, targ string, req *http.Request) (ret [
 		Request:    req,
 	}
 	for _, pair := range [...][2]string{
-		{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2)},
+		{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2/time.Second)},
 		{"EXT", ""},
 		{"LOCATION", me.Location(ip)},
 		{"SERVER", me.Server},
