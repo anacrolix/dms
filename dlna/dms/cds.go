@@ -156,6 +156,9 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 }
 
 func (me *contentDirectoryService) IgnorePath(path string) (bool, error) {
+	if !filepath.IsAbs(path) {
+		return false, fmt.Errorf("Path must be absolute: %s", path)
+	}
 	if me.IgnoreHidden {
 		if hidden, err := isHiddenPath(path); err != nil {
 			return false, err
