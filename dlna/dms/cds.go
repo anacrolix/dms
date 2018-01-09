@@ -57,7 +57,6 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	if !fileInfo.Mode().IsRegular() {
 		return nil
 	}
-	entryFilePath := cdsObject.FilePath()
 	mimeType := MimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
 	if !mimeType.IsMedia() {
@@ -170,6 +169,17 @@ func (me *contentDirectoryService) IgnorePath(path string) (bool, error) {
 		} else if !readable {
 			return true, nil
 		}
+	}
+	return false, nil
+}
+
+func tryToOpenPath(path string) (bool, error) {
+	// Ugly but portable way to check if we can open a file/directory
+	if fh, err := os.Open(path); err == nil {
+		fh.Close()
+		return true, nil
+	} else if !os.IsPermission(err) {
+		return false, err
 	}
 	return false, nil
 }
