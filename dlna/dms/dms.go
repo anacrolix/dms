@@ -174,7 +174,7 @@ func (me *Server) ssdpInterface(if_ net.Interface) {
 		},
 		Server:         serverField,
 		UUID:           me.rootDeviceUUID,
-		NotifyInterval: 5,
+		NotifyInterval: me.NotifyInterval,
 	}
 	if err := s.Init(); err != nil {
 		if if_.Flags&ssdpInterfaceFlags != ssdpInterfaceFlags {
@@ -238,6 +238,8 @@ type Server struct {
 	// Stall event subscription requests until they drop. A workaround for
 	// some bad clients.
 	StallEventSubscribe bool
+	// Time interval between SSPD announces
+	NotifyInterval time.Duration
 }
 
 // UPnP SOAP service.
