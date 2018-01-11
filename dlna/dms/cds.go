@@ -155,38 +155,6 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	return item
 }
 
-func (me *contentDirectoryService) IgnorePath(path string) (bool, error) {
-	if !filepath.IsAbs(path) {
-		return false, fmt.Errorf("Path must be absolute: %s", path)
-	}
-	if me.IgnoreHidden {
-		if hidden, err := isHiddenPath(path); err != nil {
-			return false, err
-		} else if hidden {
-			return true, nil
-		}
-	}
-	if me.IgnoreUnreadable {
-		if readable, err := isReadablePath(path); err != nil {
-			return false, err
-		} else if !readable {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func tryToOpenPath(path string) (bool, error) {
-	// Ugly but portable way to check if we can open a file/directory
-	if fh, err := os.Open(path); err == nil {
-		fh.Close()
-		return true, nil
-	} else if !os.IsPermission(err) {
-		return false, err
-	}
-	return false, nil
-}
-
 // Returns all the upnpav objects in a directory.
 func (me *contentDirectoryService) readContainer(o object, host, userAgent string) (ret []interface{}, err error) {
 	sfis := sortableFileInfoSlice{

@@ -965,3 +965,36 @@ func (srv *Server) ffmpegProbe(path string) (info *ffprobe.Info, err error) {
 	info = value.(*ffprobe.Info)
 	return
 }
+
+// IgnorePath detects if a file/directory should be ignored.
+func (server *Server) IgnorePath(path string) (bool, error) {
+	if !filepath.IsAbs(path) {
+		return false, fmt.Errorf("Path must be absolute: %s", path)
+	}
+	if server.IgnoreHidden {
+		if hidden, err := isHiddenPath(path); err != nil {
+			return false, err
+		} else if hidden {
+			return true, nil
+		}
+	}
+	if server.IgnoreUnreadable {
+		if readable, err := isReadablePath(path); err != nil {
+			return false, err
+		} else if !readable {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func tryToOpenPath(path string) (bool, error) {
+	// Ugly but portable way to check if we can open a file/directory
+	if fh, err := os.Open(path); err == nil {
+		fh.Close()
+		return true, nil
+	} else if !os.IsPermission(err) {
+		return false, err
+	}
+	return false, nil
+}
