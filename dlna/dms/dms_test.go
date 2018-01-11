@@ -3,7 +3,6 @@ package dms
 import (
 	"bytes"
 	"net/http"
-	"path/filepath"
 	"runtime"
 	"testing"
 )
@@ -13,26 +12,35 @@ type safeFilePathTestCase struct {
 }
 
 func TestSafeFilePath(t *testing.T) {
-	cases := []safeFilePathTestCase{
-		{"/", "..", "/"},
-		{"/hello", "..//", "/hello"},
-		{"", "/precious", "precious"},
-		{".", "///precious", "precious"},
-	}
+	var cases []safeFilePathTestCase
 	if runtime.GOOS == "windows" {
-		cases = append(cases, []safeFilePathTestCase{
-			{"c:", "/", "c:/"},
-			{"c:", "/test", "c:/test"},
-			{"c:/", "/", "c:/"},
-			{"c:/", "/test", "c:/test"},
-		}...)
+		cases = []safeFilePathTestCase{
+			{"c:", "/", "c:."},
+			{"c:", "/test", "c:test"},
+			{"c:\\", "/", "c:\\"},
+			{"c:\\", "/test", "c:\\test"},
+			{"c:\\hello", "../windows", "c:\\hello\\windows"},
+			{"c:\\hello", "/../windows", "c:\\hello\\windows"},
+			{"c:\\hello", "/", "c:\\hello"},
+			{"c:\\hello", "./world", "c:\\hello\\world"},
+			{"c:\\hello", "/", "c:\\hello"},
+			// These two ones are invalid but, as this actually prevents to serve them, it is fine
+			{"c:\\foo", "c:/windows/", "c:\\foo\\c:\\windows"},
+			{"c:\\foo", "e:/", "c:\\foo\\e:"},
+		}
+	} else {
+		cases = []safeFilePathTestCase{
+			{"/", "..", "/"},
+			{"/hello", "..//", "/hello"},
+			{"", "/precious", "precious"},
+			{".", "///precious", "precious"},
+		}
 	}
 	t.Logf("running %d test cases", len(cases))
 	for _, _case := range cases {
-		e := filepath.FromSlash(_case.expected)
 		a := safeFilePath(_case.root, _case.given)
-		if a != e {
-			t.Fatalf("expected %q from %q and %q but got %q", e, _case.root, _case.given, a)
+		if a != _case.expected {
+			t.Errorf("expected %q from %q and %q but got %q", _case.expected, _case.root, _case.given, a)
 		}
 	}
 }
