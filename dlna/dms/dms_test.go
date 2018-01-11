@@ -21,8 +21,8 @@ func TestSafeFilePath(t *testing.T) {
 	}
 	if runtime.GOOS == "windows" {
 		cases = append(cases, []safeFilePathTestCase{
-			{"c:", "/", "c:/"},
-			{"c:", "/test", "c:/test"},
+			{"c:", "/", "c:."},
+			{"c:", "/test", "c:test"},
 			{"c:/", "/", "c:/"},
 			{"c:/", "/test", "c:/test"},
 		}...)
@@ -32,7 +32,7 @@ func TestSafeFilePath(t *testing.T) {
 		e := filepath.FromSlash(_case.expected)
 		a := safeFilePath(_case.root, _case.given)
 		if a != e {
-			t.Fatalf("expected %q from %q and %q but got %q", e, _case.root, _case.given, a)
+			t.Errorf("expected %q from %q and %q but got %q", e, _case.root, _case.given, a)
 		}
 	}
 }
