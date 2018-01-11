@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"mime"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -298,78 +297,6 @@ func itemExtra(item *upnpav.Object, info *ffprobe.Info) {
 	}
 }
 
-func init() {
-	if err := mime.AddExtensionType(".rmvb", "application/vnd.rn-realmedia-vbr"); err != nil {
-		panic(err)
-	}
-	if err := mime.AddExtensionType(".ogv", "video/ogg"); err != nil {
-		panic(err)
-	}
-}
-
-// Example: "video/mpeg"
-type mimeType string
-
-func (me mimeType) IsMedia() bool {
-	if me == "application/vnd.rn-realmedia-vbr" {
-		return true
-	}
-	return me.Type().IsMedia()
-}
-
-// Attempts to guess mime type by peeling off extensions, such as those given
-// to incomplete files. TODO: This function may be misleading, since it
-// ignores non-media mime-types in processing.
-func mimeTypeByBaseName(name string) mimeType {
-	for name != "" {
-		ext := strings.ToLower(path.Ext(name))
-		if ext == "" {
-			break
-		}
-		ret := mimeType(mime.TypeByExtension(ext))
-		if ret.IsMedia() {
-			return ret
-		}
-		switch ext {
-		case ".part":
-			index := strings.LastIndex(name, ".")
-			if index >= 0 {
-				name = name[:index]
-			}
-		default:
-			return ""
-		}
-	}
-	return ""
-}
-
-// Used to determine the MIME-type for the given path
-func MimeTypeByPath(path_ string) (ret mimeType) {
-	defer func() {
-		if ret == "video/x-msvideo" {
-			ret = "video/avi"
-		}
-	}()
-	ret = mimeTypeByBaseName(path.Base(path_))
-	if ret != "" {
-		return
-	}
-	file, _ := os.Open(path_)
-	if file == nil {
-		return
-	}
-	var data [512]byte
-	n, _ := file.Read(data[:])
-	file.Close()
-	ret = mimeType(http.DetectContentType(data[:n]))
-	return
-}
-
-// Returns the group "type", the part before the '/'.
-func (mt mimeType) Type() mimeTypeType {
-	return mimeTypeType(strings.SplitN(string(mt), "/", 2)[0])
-}
-
 type ffmpegInfoCacheKey struct {
 	Path    string
 	ModTime int64
@@ -398,19 +325,6 @@ func transcodeResources(host, path, resolution, duration string) (ret []upnpav.R
 		})
 	}
 	return
-}
-
-// The part of a MIME type before the '/'.
-type mimeTypeType string
-
-// Returns true if the type is typical media.
-func (mtt mimeTypeType) IsMedia() bool {
-	switch mtt {
-	case "video", "audio":
-		return true
-	default:
-		return false
-	}
 }
 
 func parseDLNARangeHeader(val string) (ret dlna.NPTRange, err error) {
