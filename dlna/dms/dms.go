@@ -794,6 +794,13 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		filePath := server.filePath(r.URL.Query().Get("path"))
+		if ignored, err := server.IgnorePath(filePath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if ignored {
+			http.Error(w, "no such object", http.StatusNotFound)
+			return
+		}
 		k := r.URL.Query().Get("transcode")
 		if k == "" {
 			http.ServeFile(w, r, filePath)
