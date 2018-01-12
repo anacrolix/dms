@@ -34,7 +34,7 @@ func (cds *contentDirectoryService) updateIDString() string {
 func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) interface{} {
 	entryFilePath := cdsObject.FilePath()
 	if ignored, err := me.IgnorePath(entryFilePath); err != nil {
-		panic(err)
+		log.Panicf("%s: %s", entryFilePath, err)
 	} else if ignored {
 		return nil
 	}
