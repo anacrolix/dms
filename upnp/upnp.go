@@ -102,21 +102,36 @@ type Error struct {
 	Desc    string   `xml:"errorDescription"`
 }
 
+func (e *Error) Error() string {
+	return fmt.Sprintf("%d %s", e.Code, e.Desc)
+}
+
 const (
 	InvalidActionErrorCode        = 401
+	ActionFailedErrorCode         = 501
 	ArgumentValueInvalidErrorCode = 600
 )
 
 var (
-	InvalidActionError Error = Error{
-		Code: 401,
-		Desc: "Invalid Action",
-	}
-	ArgumentValueInvalidError = Error{
-		Code: 600,
-		Desc: "The argument value is invalid",
-	}
+	InvalidActionError        = Errorf(401, "Invalid Action")
+	ArgumentValueInvalidError = Errorf(600, "The argument value is invalid")
 )
+
+// Errorf creates an UPNP error from the given code and description
+func Errorf(code uint, tpl string, args ...interface{}) *Error {
+	return &Error{Code: code, Desc: fmt.Sprintf(tpl, args...)}
+}
+
+// ConvertError converts any error to an UPNP error
+func ConvertError(err error) *Error {
+	if err == nil {
+		return nil
+	}
+	if e, ok := err.(*Error); ok {
+		return e
+	}
+	return Errorf(ActionFailedErrorCode, err.Error())
+}
 
 type Action struct {
 	Name      string
