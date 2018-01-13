@@ -233,13 +233,17 @@ type Server struct {
 	// Disable transcoding, and the resource elements implied in the CDS.
 	NoTranscode bool
 	// Disable media probing with ffprobe
-	NoProbe     bool
-	Icons       []Icon
+	NoProbe bool
+	Icons   []Icon
 	// Stall event subscription requests until they drop. A workaround for
 	// some bad clients.
 	StallEventSubscribe bool
 	// Time interval between SSPD announces
 	NotifyInterval time.Duration
+	// Ignore hidden files and directories
+	IgnoreHidden bool
+	// Ingnore unreadable files and directories
+	IgnoreUnreadable bool
 }
 
 // UPnP SOAP service.
@@ -790,6 +794,13 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		filePath := server.filePath(r.URL.Query().Get("path"))
+		if ignored, err := server.IgnorePath(filePath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if ignored {
+			http.Error(w, "no such object", http.StatusNotFound)
+			return
+		}
 		k := r.URL.Query().Get("transcode")
 		if k == "" {
 			http.ServeFile(w, r, filePath)
@@ -960,4 +971,37 @@ func (srv *Server) ffmpegProbe(path string) (info *ffprobe.Info, err error) {
 	}
 	info = value.(*ffprobe.Info)
 	return
+}
+
+// IgnorePath detects if a file/directory should be ignored.
+func (server *Server) IgnorePath(path string) (bool, error) {
+	if !filepath.IsAbs(path) {
+		return false, fmt.Errorf("Path must be absolute: %s", path)
+	}
+	if server.IgnoreHidden {
+		if hidden, err := isHiddenPath(path); err != nil {
+			return false, err
+		} else if hidden {
+			return true, nil
+		}
+	}
+	if server.IgnoreUnreadable {
+		if readable, err := isReadablePath(path); err != nil {
+			return false, err
+		} else if !readable {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func tryToOpenPath(path string) (bool, error) {
+	// Ugly but portable way to check if we can open a file/directory
+	if fh, err := os.Open(path); err == nil {
+		fh.Close()
+		return true, nil
+	} else if !os.IsPermission(err) {
+		return false, err
+	}
+	return false, nil
 }

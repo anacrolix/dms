@@ -32,6 +32,12 @@ func (cds *contentDirectoryService) updateIDString() string {
 // Turns the given entry and DMS host into a UPnP object. A nil object is
 // returned if the entry is not of interest.
 func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) interface{} {
+	entryFilePath := cdsObject.FilePath()
+	if ignored, err := me.IgnorePath(entryFilePath); err != nil {
+		log.Panicf("%s: %s", entryFilePath, err)
+	} else if ignored {
+		return nil
+	}
 	obj := upnpav.Object{
 		ID:         cdsObject.ID(),
 		Restricted: 1,
@@ -51,7 +57,6 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	if !fileInfo.Mode().IsRegular() {
 		return nil
 	}
-	entryFilePath := cdsObject.FilePath()
 	mimeType := MimeTypeByPath(entryFilePath)
 	mimeTypeType := mimeType.Type()
 	if !mimeType.IsMedia() {
