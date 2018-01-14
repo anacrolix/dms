@@ -20,16 +20,34 @@ func init() {
 // Example: "video/mpeg"
 type mimeType string
 
+// IsMedia returns true for media MIME-types
 func (mt mimeType) IsMedia() bool {
-	if mt == "application/vnd.rn-realmedia-vbr" {
-		return true
-	}
-	return mt.Type().IsMedia()
+	return mt.IsVideo() || mt.IsAudio() || mt.IsImage()
+}
+
+// IsVideo returns true for video MIME-types
+func (mt mimeType) IsVideo() bool {
+	return strings.HasPrefix(string(mt), "video/") || mt == "application/vnd.rn-realmedia-vbr"
+}
+
+// IsAudio returns true for audio MIME-types
+func (mt mimeType) IsAudio() bool {
+	return strings.HasPrefix(string(mt), "audio/")
+}
+
+// IsImage returns true for image MIME-types
+func (mt mimeType) IsImage() bool {
+	return strings.HasPrefix(string(mt), "image/")
 }
 
 // Returns the group "type", the part before the '/'.
-func (mt mimeType) Type() mimeTypeType {
-	return mimeTypeType(strings.SplitN(string(mt), "/", 2)[0])
+func (mt mimeType) Type() string {
+	return strings.SplitN(string(mt), "/", 2)[0]
+}
+
+// Returns the string representation of this MIME-type
+func (mt mimeType) String() string {
+	return string(mt)
 }
 
 // Used to determine the MIME-type for the given path
@@ -86,16 +104,5 @@ func mimeTypeByContent(path string) (ret mimeType, err error) {
 	}
 	return mimeType(http.DetectContentType(data[:n])), nil
 }
-
-// The part of a MIME type before the '/'.
-type mimeTypeType string
-
-// Returns true if the type is typical media.
-func (mtt mimeTypeType) IsMedia() bool {
-	switch mtt {
-	case "video", "audio":
-		return true
-	default:
-		return false
 	}
 }

@@ -58,7 +58,6 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		return nil
 	}
 	mimeType := MimeTypeByPath(entryFilePath)
-	mimeTypeType := mimeType.Type()
 	if !mimeType.IsMedia() {
 		return nil
 	}
@@ -74,7 +73,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	// TODO(anacrolix): This might not be necessary due to item res image
 	// element.
 	obj.AlbumArtURI = iconURI
-	obj.Class = "object.item." + string(mimeTypeType) + "Item"
+	obj.Class = "object.item." + mimeType.Type() + "Item"
 	var (
 		ffInfo        *ffprobe.Info
 		nativeBitrate uint
@@ -133,12 +132,12 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		Size:       uint64(fileInfo.Size()),
 		Resolution: resolution,
 	})
-	if mimeTypeType == "video" {
+	if mimeType.IsVideo() {
 		if !me.NoTranscode {
 			item.Res = append(item.Res, transcodeResources(host, cdsObject.Path, resolution, resDuration)...)
 		}
 	}
-	if mimeTypeType.IsMedia() {
+	if mimeType.IsVideo() || mimeType.IsImage() {
 		item.Res = append(item.Res, upnpav.Resource{
 			URL: (&url.URL{
 				Scheme: "http",
