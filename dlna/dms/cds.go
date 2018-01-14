@@ -57,7 +57,10 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	if !fileInfo.Mode().IsRegular() {
 		return nil
 	}
-	mimeType := MimeTypeByPath(entryFilePath)
+	mimeType, err := MimeTypeByPath(entryFilePath)
+	if err != nil {
+		return nil
+	}
 	if !mimeType.IsMedia() {
 		return nil
 	}

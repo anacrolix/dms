@@ -50,47 +50,33 @@ func (mt mimeType) String() string {
 	return string(mt)
 }
 
-// Used to determine the MIME-type for the given path
-func MimeTypeByPath(path string) (ret mimeType) {
-	defer func() {
-		if ret == "video/x-msvideo" {
-			ret = "video/avi"
-		}
-	}()
-	ret = mimeTypeByBaseName(path.Base(path))
-	if ret != "" {
-		return
+// MimeTypeByPath determines the MIME-type of file at the given path
+func MimeTypeByPath(filePath string) (ret mimeType, err error) {
+	ret = mimeTypeByBaseName(path.Base(filePath))
+	if ret == "" {
+		ret, err = mimeTypeByContent(filePath)
 	}
-	ret, _ = mimeTypeByContent(path)
+	if ret == "video/x-msvideo" {
+		ret = "video/avi"
+	} else if ret == "" {
+		ret = "application/octet-stream"
+	}
 	return
 }
 
-// Attempts to guess mime type by peeling off extensions, such as those given
-// to incomplete files. TODO: This function may be misleading, since it
-// ignores non-media mime-types in processing.
+// Guess MIME-type from the extension, ignoring ".part".
 func mimeTypeByBaseName(name string) mimeType {
-	for name != "" {
-		ext := strings.ToLower(path.Ext(name))
-		if ext == "" {
-			break
-		}
-		ret := mimeType(mime.TypeByExtension(ext))
-		if ret.IsMedia() {
-			return ret
-		}
-		switch ext {
-		case ".part":
-			index := strings.LastIndex(name, ".")
-			if index >= 0 {
-				name = name[:index]
-			}
-		default:
-			return ""
-		}
+	if strings.HasSuffix(name, ".part") {
+		name = name[:len(name)-5]
 	}
-	return ""
+	ext := path.Ext(name)
+	if ext != "" {
+		return mimeType(mime.TypeByExtension(ext))
+	}
+	return mimeType("")
 }
 
+// Guess the MIME-type by analysing the first 512 bytes of the file.
 func mimeTypeByContent(path string) (ret mimeType, err error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -98,11 +84,8 @@ func mimeTypeByContent(path string) (ret mimeType, err error) {
 	}
 	defer file.Close()
 	var data [512]byte
-	n, err := file.Read(data[:])
-	if err != nil {
-		return
+	if n, err := file.Read(data[:]); err == nil {
+		ret = mimeType(http.DetectContentType(data[:n]))
 	}
-	return mimeType(http.DetectContentType(data[:n])), nil
-}
-	}
+	return
 }

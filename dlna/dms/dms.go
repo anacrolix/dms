@@ -717,7 +717,12 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		}
 		k := r.URL.Query().Get("transcode")
 		if k == "" {
-			w.Header().Set("Content-Type", string(MimeTypeByPath(filePath)))
+			mimeType, err := MimeTypeByPath(filePath)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", string(mimeType))
 			http.ServeFile(w, r, filePath)
 			return
 		}
