@@ -66,9 +66,7 @@ func MimeTypeByPath(filePath string) (ret mimeType, err error) {
 
 // Guess MIME-type from the extension, ignoring ".part".
 func mimeTypeByBaseName(name string) mimeType {
-	if strings.HasSuffix(name, ".part") {
-		name = name[:len(name)-5]
-	}
+	name = strings.TrimSuffix(name, ".part")
 	ext := path.Ext(name)
 	if ext != "" {
 		return mimeType(mime.TypeByExtension(ext))
