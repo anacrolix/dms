@@ -20,11 +20,11 @@ func init() {
 // Example: "video/mpeg"
 type mimeType string
 
-func (me mimeType) IsMedia() bool {
-	if me == "application/vnd.rn-realmedia-vbr" {
+func (mt mimeType) IsMedia() bool {
+	if mt == "application/vnd.rn-realmedia-vbr" {
 		return true
 	}
-	return me.Type().IsMedia()
+	return mt.Type().IsMedia()
 }
 
 // Returns the group "type", the part before the '/'.
@@ -33,17 +33,17 @@ func (mt mimeType) Type() mimeTypeType {
 }
 
 // Used to determine the MIME-type for the given path
-func MimeTypeByPath(path_ string) (ret mimeType) {
+func MimeTypeByPath(path string) (ret mimeType) {
 	defer func() {
 		if ret == "video/x-msvideo" {
 			ret = "video/avi"
 		}
 	}()
-	ret = mimeTypeByBaseName(path.Base(path_))
+	ret = mimeTypeByBaseName(path.Base(path))
 	if ret != "" {
 		return
 	}
-	ret, _ = mimeTypeByContent(path_)
+	ret, _ = mimeTypeByContent(path)
 	return
 }
 
@@ -73,8 +73,8 @@ func mimeTypeByBaseName(name string) mimeType {
 	return ""
 }
 
-func mimeTypeByContent(path_ string) (ret mimeType, err error) {
-	file, err := os.Open(path_)
+func mimeTypeByContent(path string) (ret mimeType, err error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return
 	}
