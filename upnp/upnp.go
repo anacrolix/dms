@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,8 +28,7 @@ func ParseServiceType(s string) (ret ServiceURN, err error) {
 		return
 	}
 	if len(matches) != 3 {
-		err = errors.New(s)
-		return
+		log.Panicf("Invalid serviceURNRegexp ?")
 	}
 	ret.Type = matches[1]
 	ret.Version, err = strconv.ParseUint(matches[2], 0, 0)
@@ -40,7 +40,7 @@ type SoapAction struct {
 	Action string
 }
 
-func ParseActionHTTPHeader(s string) (ret SoapAction, ok bool) {
+func ParseActionHTTPHeader(s string) (ret SoapAction, err error) {
 	if s[0] != '"' || s[len(s)-1] != '"' {
 		return
 	}
@@ -50,11 +50,7 @@ func ParseActionHTTPHeader(s string) (ret SoapAction, ok bool) {
 		return
 	}
 	ret.Action = s[hashIndex+1:]
-	var err error
 	ret.ServiceURN, err = ParseServiceType(s[:hashIndex])
-	if err == nil {
-		ok = true
-	}
 	return
 }
 

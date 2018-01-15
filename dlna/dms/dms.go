@@ -247,7 +247,7 @@ type Server struct {
 
 // UPnP SOAP service.
 type UPnPService interface {
-	Handle(action string, argsXML []byte, r *http.Request) (respArgs map[string]string, err *upnp.Error)
+	Handle(action string, argsXML []byte, r *http.Request) (respArgs map[string]string, err error)
 	Subscribe(callback []*url.URL, timeoutSeconds int) (sid string, actualTimeout int, err error)
 	Unsubscribe(sid string) error
 }
@@ -513,11 +513,11 @@ func marshalSOAPResponse(sa upnp.SoapAction, args map[string]string) []byte {
 }
 
 // Handle a SOAP request and return the response arguments or UPnP error.
-func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte, r *http.Request) (map[string]string, *upnp.Error) {
+func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte, r *http.Request) (map[string]string, error) {
 	service, ok := me.services[sa.Type]
 	if !ok {
 		// TODO: What's the invalid service error?!
-		return nil, &upnp.InvalidActionError
+		return nil, upnp.Errorf(upnp.InvalidActionErrorCode, "Invalid service: %s", sa.Type)
 	}
 	return service.Handle(sa.Action, actionRequestXML, r)
 }
@@ -525,9 +525,9 @@ func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte
 // Handle a service control HTTP request.
 func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) {
 	soapActionString := r.Header.Get("SOAPACTION")
-	soapAction, ok := upnp.ParseActionHTTPHeader(soapActionString)
-	if !ok {
-		http.Error(w, fmt.Sprintf("invalid soapaction: %#v", soapActionString), http.StatusBadRequest)
+	soapAction, err := upnp.ParseActionHTTPHeader(soapActionString)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	var env soap.Envelope
@@ -543,14 +543,15 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 	soapRespXML, code := func() ([]byte, int) {
 		respArgs, err := me.soapActionResponse(soapAction, env.Body.Action, r)
 		if err != nil {
-			return xmlMarshalOrPanic(soap.NewFault("UPnPError", err)), 500
+			upnpErr := upnp.ConvertError(err)
+			return xmlMarshalOrPanic(soap.NewFault("UPnPError", upnpErr)), 500
 		}
 		return marshalSOAPResponse(soapAction, respArgs), 200
 	}()
 	bodyStr := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8" standalone="yes"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>%s</s:Body></s:Envelope>`, soapRespXML)
 	w.WriteHeader(code)
 	if _, err := w.Write([]byte(bodyStr)); err != nil {
-		panic(err)
+		log.Print(err)
 	}
 }
 
