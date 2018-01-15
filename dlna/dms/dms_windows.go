@@ -11,22 +11,23 @@ import (
 const hiddenAttributes = windows.FILE_ATTRIBUTE_HIDDEN | windows.FILE_ATTRIBUTE_SYSTEM
 
 func isHiddenPath(path string) (hidden bool, err error) {
+	if path == filepath.VolumeName(path)+"\\" {
+		// Volumes always have the "SYSTEM" flag, so do not even test them
+		return false, nil
+	}
 	winPath, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return
 	}
 	attrs, err := windows.GetFileAttributes(winPath)
-	if err == nil {
-		if attrs&hiddenAttributes != 0 {
-			hidden = true
-		} else {
-			parent := filepath.Dir(path)
-			if parent != path {
-				hidden, err = isHiddenPath(parent)
-			}
-		}
+	if err != nil {
+		return
 	}
-	return
+	if attrs&hiddenAttributes != 0 {
+		hidden = true
+		return
+	}
+	return isHiddenPath(filepath.Dir(path))
 }
 
 func isReadablePath(path string) (bool, error) {
