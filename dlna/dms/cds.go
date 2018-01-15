@@ -51,6 +51,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		return
 	}
 	if !fileInfo.Mode().IsRegular() {
+		log.Printf("%s ignored: non-regular file", cdsObject.FilePath())
 		return
 	}
 	mimeType, err := MimeTypeByPath(entryFilePath)
@@ -58,6 +59,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		return
 	}
 	if !mimeType.IsMedia() {
+		log.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
 		return
 	}
 	iconURI := (&url.URL{
@@ -169,6 +171,7 @@ func (me *contentDirectoryService) readContainer(o object, host, userAgent strin
 		child := object{path.Join(o.Path, fi.Name()), me.RootObjectPath}
 		obj, err := me.cdsObjectToUpnpavObject(child, fi, host, userAgent)
 		if err != nil {
+			log.Printf("error with %s: %s", child.FilePath(), err)
 			continue
 		}
 		if obj != nil {
