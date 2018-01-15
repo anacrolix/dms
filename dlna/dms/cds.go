@@ -2,7 +2,6 @@ package dms
 
 import (
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -31,12 +30,14 @@ func (cds *contentDirectoryService) updateIDString() string {
 
 // Turns the given entry and DMS host into a UPnP object. A nil object is
 // returned if the entry is not of interest.
-func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) interface{} {
+func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) (ret interface{}, err error) {
 	entryFilePath := cdsObject.FilePath()
-	if ignored, err := me.IgnorePath(entryFilePath); err != nil {
-		log.Panicf("%s: %s", entryFilePath, err)
-	} else if ignored {
-		return nil
+	ignored, err := me.IgnorePath(entryFilePath)
+	if err != nil {
+		return
+	}
+	if ignored {
+		return
 	}
 	obj := upnpav.Object{
 		ID:         cdsObject.ID(),
@@ -44,25 +45,20 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		ParentID:   cdsObject.ParentID(),
 	}
 	if fileInfo.IsDir() {
-		//if !me.objectHasChildren(cdsObject) {
-		//		return nil
-		//	}
 		obj.Class = "object.container.storageFolder"
 		obj.Title = fileInfo.Name()
-		return upnpav.Container{
-			Object: obj,
-			//		ChildCount: me.objectChildCount(cdsObject),
-		}
+		ret = upnpav.Container{Object: obj}
+		return
 	}
 	if !fileInfo.Mode().IsRegular() {
-		return nil
+		return
 	}
 	mimeType, err := MimeTypeByPath(entryFilePath)
 	if err != nil {
-		return nil
+		return
 	}
 	if !mimeType.IsMedia() {
-		return nil
+		return
 	}
 	iconURI := (&url.URL{
 		Scheme: "http",
@@ -154,7 +150,8 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 			ProtocolInfo: "http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN",
 		})
 	}
-	return item
+	ret = item
+	return
 }
 
 // Returns all the upnpav objects in a directory.
@@ -169,7 +166,11 @@ func (me *contentDirectoryService) readContainer(o object, host, userAgent strin
 	}
 	sort.Sort(sfis)
 	for _, fi := range sfis.fileInfoSlice {
-		obj := me.cdsObjectToUpnpavObject(object{path.Join(o.Path, fi.Name()), me.RootObjectPath}, fi, host, userAgent)
+		child := object{path.Join(o.Path, fi.Name()), me.RootObjectPath}
+		obj, err := me.cdsObjectToUpnpavObject(child, fi, host, userAgent)
+		if err != nil {
+			continue
+		}
 		if obj != nil {
 			ret = append(ret, obj)
 		}
@@ -196,14 +197,14 @@ func (me *contentDirectoryService) objectFromID(id string) (o object, err error)
 	}
 	o.Path = path.Clean(o.Path)
 	if !path.IsAbs(o.Path) {
-		err = errors.New("bad ObjectID")
+		err = fmt.Errorf("bad ObjectID %v", o.Path)
 		return
 	}
 	o.RootObjectPath = me.RootObjectPath
 	return
 }
 
-func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http.Request) (map[string]string, *upnp.Error) {
+func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http.Request) (map[string]string, error) {
 	host := r.Host
 	userAgent := r.UserAgent()
 	switch action {
@@ -218,24 +219,17 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 	case "Browse":
 		var browse browse
 		if err := xml.Unmarshal([]byte(argsXML), &browse); err != nil {
-			panic(err)
+			return nil, err
 		}
 		obj, err := me.objectFromID(browse.ObjectID)
 		if err != nil {
-			return nil, &upnp.Error{
-				Code: upnpav.NoSuchObjectErrorCode,
-				Desc: err.Error(),
-			}
+			return nil, upnp.Errorf(upnpav.NoSuchObjectErrorCode, err.Error())
 		}
 		switch browse.BrowseFlag {
 		case "BrowseDirectChildren":
 			objs, err := me.readContainer(obj, host, userAgent)
 			if err != nil {
-				return nil, &upnp.Error{
-					// readContainer can only fail due to bad ObjectID afaict
-					Code: upnpav.NoSuchObjectErrorCode,
-					Desc: err.Error(),
-				}
+				return nil, upnp.Errorf(upnpav.NoSuchObjectErrorCode, err.Error())
 			}
 			totalMatches := len(objs)
 			objs = objs[func() (low int) {
@@ -250,7 +244,7 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 			}
 			result, err := xml.Marshal(objs)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			return map[string]string{
 				"TotalMatches":   fmt.Sprint(totalMatches),
@@ -261,36 +255,37 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 		case "BrowseMetadata":
 			fileInfo, err := os.Stat(obj.FilePath())
 			if err != nil {
-				return nil, &upnp.Error{
-					Code: upnpav.NoSuchObjectErrorCode,
-					Desc: err.Error(),
+				if os.IsNotExist(err) {
+					return nil, &upnp.Error{
+						Code: upnpav.NoSuchObjectErrorCode,
+						Desc: err.Error(),
+					}
 				}
+				return nil, err
+			}
+			upnp, err := me.cdsObjectToUpnpavObject(obj, fileInfo, host, userAgent)
+			if err != nil {
+				return nil, err
+			}
+			buf, err := xml.Marshal(upnp)
+			if err != nil {
+				return nil, err
 			}
 			return map[string]string{
 				"TotalMatches":   "1",
 				"NumberReturned": "1",
-				"Result": didl_lite(func() string {
-					buf, err := xml.Marshal(me.cdsObjectToUpnpavObject(obj, fileInfo, host, userAgent))
-					if err != nil {
-						panic(err) // because aliens
-					}
-					return string(buf)
-				}()),
-				"UpdateID": me.updateIDString(),
+				"Result":         didl_lite(func() string { return string(buf) }()),
+				"UpdateID":       me.updateIDString(),
 			}, nil
 		default:
-			return nil, &upnp.Error{
-				Code: upnp.ArgumentValueInvalidErrorCode,
-				Desc: fmt.Sprint("unhandled browse flag:", browse.BrowseFlag),
-			}
+			return nil, upnp.Errorf(upnp.ArgumentValueInvalidErrorCode, "unhandled browse flag: %v", browse.BrowseFlag)
 		}
 	case "GetSearchCapabilities":
 		return map[string]string{
 			"SearchCaps": "",
 		}, nil
 	default:
-		log.Println("unhandled CDS action:", action)
-		return nil, &upnp.InvalidActionError
+		return nil, upnp.InvalidActionError
 	}
 }
 
