@@ -903,6 +903,7 @@ func (server *Server) IgnorePath(path string) (bool, error) {
 		if hidden, err := isHiddenPath(path); err != nil {
 			return false, err
 		} else if hidden {
+			log.Print(path, " ignored: hidden")
 			return true, nil
 		}
 	}
@@ -910,6 +911,7 @@ func (server *Server) IgnorePath(path string) (bool, error) {
 		if readable, err := isReadablePath(path); err != nil {
 			return false, err
 		} else if !readable {
+			log.Print(path, " ignored: unreadable")
 			return true, nil
 		}
 	}
