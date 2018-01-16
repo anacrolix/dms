@@ -192,25 +192,22 @@ func (me *Server) makeNotifyMessage(target, nts string, extraHdrs [][2]string) [
 	return buf.Bytes()
 }
 
-func (me *Server) send(buf []byte, addr *net.UDPAddr) error {
-	n, err := me.conn.WriteToUDP(buf, addr)
-	if err != nil {
-		return err
+func (me *Server) send(buf []byte, addr *net.UDPAddr) {
+	if n, err := me.conn.WriteToUDP(buf, addr); err != nil {
+		log.Printf("error writing to UDP socket: %s", err)
+	} else if n != len(buf) {
+		log.Printf("short write: %d/%d bytes", n, len(buf))
 	}
-	if n != len(buf) {
-		return fmt.Errorf("short write: %d/%d bytes", n, len(buf))
-	}
-	return nil
 }
 
-func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr) error {
-	time.Sleep(delay)
-	select {
-	case <-me.closed:
-		return nil
-	default:
-	}
-	return me.send(buf, addr)
+func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr) {
+	go func() {
+		select {
+		case <-time.After(delay):
+			me.send(buf, addr)
+		case <-me.closed:
+		}
+	}()
 }
 
 func (me *Server) log(args ...interface{}) {
@@ -221,9 +218,7 @@ func (me *Server) log(args ...interface{}) {
 func (me *Server) sendByeBye() {
 	for _, type_ := range me.allTypes() {
 		buf := me.makeNotifyMessage(type_, byebyeNTS, nil)
-		if err := me.send(buf, NetAddr); err != nil {
-			log.Print(err)
-		}
+		me.send(buf, NetAddr)
 	}
 }
 
@@ -231,12 +226,7 @@ func (me *Server) notifyAll(nts string, extraHdrs [][2]string) {
 	for _, type_ := range me.allTypes() {
 		buf := me.makeNotifyMessage(type_, nts, extraHdrs)
 		delay := time.Duration(rand.Int63n(int64(100 * time.Millisecond)))
-		go func() {
-			err := me.delayedSend(delay, buf, NetAddr)
-			if err != nil {
-				me.log(err)
-			}
-		}()
+		me.delayedSend(delay, buf, NetAddr)
 	}
 }
 
@@ -309,11 +299,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		for _, type_ := range types {
 			resp := me.makeResponse(ip, type_, req)
 			delay := time.Duration(rand.Int63n(int64(time.Second) * int64(mx)))
-			go func() {
-				if err := me.delayedSend(delay, resp, sender); err != nil {
-					me.log(err)
-				}
-			}()
+			me.delayedSend(delay, resp, sender)
 		}
 	}
 }
