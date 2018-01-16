@@ -1,6 +1,7 @@
 package dms
 
 import (
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -10,10 +11,10 @@ import (
 
 func init() {
 	if err := mime.AddExtensionType(".rmvb", "application/vnd.rn-realmedia-vbr"); err != nil {
-		panic(err)
+		log.Printf("Could not register application/vnd.rn-realmedia-vbr MIME type: %s", err)
 	}
 	if err := mime.AddExtensionType(".ogv", "video/ogg"); err != nil {
-		panic(err)
+		log.Printf("Could not register video/ogg MIME type: %s", err)
 	}
 }
 

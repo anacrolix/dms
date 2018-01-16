@@ -62,7 +62,7 @@ var transcodes = map[string]transcodeSpec{
 func makeDeviceUuid(unique string) string {
 	h := md5.New()
 	if _, err := io.WriteString(h, unique); err != nil {
-		panic(err)
+		log.Panicf("makeDeviceUuid write failed: %s", err)
 	}
 	buf := h.Sum(nil)
 	return upnp.FormatUUID(buf)
@@ -425,13 +425,13 @@ func getDefaultFriendlyName() string {
 	return fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
 		user, err := user.Current()
 		if err != nil {
-			panic(err)
+			log.Panicf("getDefaultFriendlyName could not get username: %s", err)
 		}
 		return user.Name
 	}(), func() string {
 		name, err := os.Hostname()
 		if err != nil {
-			panic(err)
+			log.Panicf("getDefaultFriendlyName could not get hostname: %s", err)
 		}
 		return name
 	}())
@@ -440,7 +440,7 @@ func getDefaultFriendlyName() string {
 func xmlMarshalOrPanic(value interface{}) []byte {
 	ret, err := xml.MarshalIndent(value, "", "  ")
 	if err != nil {
-		panic(err)
+		log.Panicf("xmlMarshalOrPanic failed to marshal %v: %s", value, err)
 	}
 	return ret
 }
@@ -580,7 +580,7 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
-	body, err := xml.Marshal(upnp.PropertySet{
+	body := xmlMarshalOrPanic(upnp.PropertySet{
 		Properties: []upnp.Property{
 			upnp.Property{
 				Variable: upnp.Variable{
@@ -607,9 +607,6 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		},
 		Space: "urn:schemas-upnp-org:event-1-0",
 	})
-	if err != nil {
-		panic(err)
-	}
 	body = append([]byte(`<?xml version="1.0"?>`+"\n"), body...)
 	eventingLogger.Print(string(body))
 	for _, _url := range urls {
@@ -630,7 +627,7 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		resp, err := http.DefaultClient.Do(req)
 		eventingLogger.Print("finished notify")
 		if err != nil {
-			log.Print(err)
+			log.Printf("Could not notify %s: %s", _url.String(), err)
 			continue
 		}
 		eventingLogger.Print(resp)
