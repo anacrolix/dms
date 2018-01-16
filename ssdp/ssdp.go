@@ -32,7 +32,7 @@ func init() {
 	var err error
 	NetAddr, err = net.ResolveUDPAddr("udp4", AddrString)
 	if err != nil {
-		panic(err)
+		log.Panicf("Could not resolve %s: %s", AddrString, err)
 	}
 }
 
@@ -116,7 +116,7 @@ func (me *Server) serve() {
 		default:
 		}
 		if err != nil {
-			log.Print(err)
+			log.Printf("error reading from UDP socket: %s", err)
 			break
 		}
 		go me.handle(b[:n], addr)
@@ -262,9 +262,10 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	}
 	var mx uint
 	if req.Header.Get("Host") == AddrString {
-		i, err := strconv.ParseUint(req.Header.Get("mx"), 0, 0)
+		mxHeader := req.Header.Get("mx")
+		i, err := strconv.ParseUint(mxHeader, 0, 0)
 		if err != nil {
-			log.Println(err)
+			log.Printf("Invalid mx header %q: %s", mxHeader, err)
 			return
 		}
 		mx = uint(i)
