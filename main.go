@@ -90,7 +90,8 @@ func (fc *fFprobeCache) Set(key interface{}, value interface{}) {
 	for _, v := range []interface{}{key, value} {
 		b, err := json.Marshal(v)
 		if err != nil {
-			panic(err)
+			log.Printf("Could not marshal %v: %s", v, err)
+			continue
 		}
 		size += int64(len(b))
 	}
