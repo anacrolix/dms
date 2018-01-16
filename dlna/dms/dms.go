@@ -613,7 +613,8 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		bodyReader := bytes.NewReader(body)
 		req, err := http.NewRequest("NOTIFY", _url.String(), bodyReader)
 		if err != nil {
-			panic(err)
+			log.Printf("Could not create a request to notify %s: %s", _url.String(), err)
+			continue
 		}
 		req.Header["CONTENT-TYPE"] = []string{`text/xml; charset="utf-8"`}
 		req.Header["NT"] = []string{"upnp:event"}
