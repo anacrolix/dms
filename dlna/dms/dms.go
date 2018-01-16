@@ -752,20 +752,23 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	}
 }
 
-func (s *Server) initServices() {
+func (s *Server) initServices() (err error) {
 	urn, err := upnp.ParseServiceType(services[0].ServiceType)
 	if err != nil {
-		panic(err)
+		return
 	}
 	s.services = map[string]UPnPService{
 		urn.Type: &contentDirectoryService{
 			Server: s,
 		},
 	}
+	return
 }
 
 func (srv *Server) Serve() (err error) {
-	srv.initServices()
+	if err = srv.initServices(); err != nil {
+		return
+	}
 	srv.closed = make(chan struct{})
 	if srv.FriendlyName == "" {
 		srv.FriendlyName = getDefaultFriendlyName()
