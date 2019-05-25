@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -35,6 +36,7 @@ type dmsConfig struct {
 	NotifyInterval      time.Duration
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
+	AllowedIps          []string
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -108,6 +110,7 @@ func main() {
 	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
+	allowedIps := flag.String("allowedIps", "", "allowed ip of clients, separated by comma")
 	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
 	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
 	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
@@ -127,6 +130,7 @@ func main() {
 	config.FriendlyName = *friendlyName
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
+	config.AllowedIps = strings.Split(*allowedIps, ",")
 
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
@@ -197,6 +201,7 @@ func main() {
 		NotifyInterval:      config.NotifyInterval,
 		IgnoreHidden:        config.IgnoreHidden,
 		IgnoreUnreadable:    config.IgnoreUnreadable,
+		AllowedIps:          config.AllowedIps,
 	}
 	go func() {
 		if err := dmsServer.Serve(); err != nil {
