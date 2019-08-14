@@ -5,9 +5,8 @@ dms
     :target: https://circleci.com/gh/anacrolix/dms
 
 dms is a UPnP DLNA Digital Media Server. It runs from the terminal, and serves
-content directly from the filesystem from the working directory, or the path
-given. The SSDP component will broadcast and respond to requests on all
-available network interfaces.
+content directly from the filesystem from the path given. The SSDP component
+will broadcast and respond to requests on all available network interfaces.
 
 dms advertises and serves the raw files, in addition to alternate transcoded
 streams when it's able, such as mpeg2 PAL-DVD and WebM for the Chromecast. It
@@ -28,7 +27,7 @@ Ensure ``ffmpeg``/``avconv`` and/or ``ffmpegthumbnailer`` are in the ``PATH`` if
 
 To run::
 
-    $ "$GOPATH"/bin/dms
+    $ "$GOPATH"/bin/dms -path $(pwd)
 
 Known Compatible Players and Renderers
 ======================================
