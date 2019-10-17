@@ -281,8 +281,12 @@ func (cache *fFprobeCache) save(path string) error {
 
 func readIcon(path string, size uint) *bytes.Reader {
 	if path == "" {
+		if size == 48 {
+			log.Printf("read default device icon")
+			return bytes.NewReader(MustAsset("data/VGC Sonic.png"))
+		}
 		log.Printf("read default device icon")
-		return bytes.NewReader(MustAsset("data/VGC Sonic.png"))
+		return bytes.NewReader(MustAsset("data/VGC Sonic 128.png"))
 	}
 	log.Printf("read custom device icon %q", path)
 	imageFile, err := os.Open(path)
