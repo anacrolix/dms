@@ -281,12 +281,10 @@ func (cache *fFprobeCache) save(path string) error {
 
 func readIcon(path string, size uint) *bytes.Reader {
 	if path == "" {
-		if size == 48 {
-			log.Printf("read default device icon")
-			return bytes.NewReader(MustAsset("data/VGC Sonic.png"))
-		}
 		log.Printf("read default device icon")
-		return bytes.NewReader(MustAsset("data/VGC Sonic 128.png"))
+			imageFile := bytes.NewReader(MustAsset("data/VGC Sonic.png"))
+			imageData, _, _ := image.Decode(imageFile)
+			return resizeImage(imageData, size)
 	}
 	log.Printf("read custom device icon %q", path)
 	imageFile, err := os.Open(path)
@@ -295,15 +293,16 @@ func readIcon(path string, size uint) *bytes.Reader {
 		readIcon("", size)
 	}
 	defer imageFile.Close()
-
 	imageData, _, err := image.Decode(imageFile)
 	if err != nil {
-		log.Printf("unable to decode icon png file %q", path)
+		log.Printf("unable to decode icon png file")
 		readIcon("", size)
 	}
+	return resizeImage(imageData, size)
+}
 
+func resizeImage(imageData image.Image, size uint) *bytes.Reader{
 	img := resize.Resize(size, size, imageData, resize.Lanczos3)
-
 	var buff bytes.Buffer
 	png.Encode(&buff, img)
 	return bytes.NewReader(buff.Bytes())
