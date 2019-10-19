@@ -211,9 +211,11 @@ func main() {
 		IgnoreUnreadable:    config.IgnoreUnreadable,
 		AllowedIps:          config.AllowedIps,
 	}
-
+	if err := dmsServer.Init(); err != nil {
+		log.Fatalf("error initing dms server: %v", err)
+	}
 	go func() {
-		if err := dmsServer.Serve(); err != nil {
+		if err := dmsServer.Run(); err != nil {
 			log.Fatal(err)
 		}
 	}()
