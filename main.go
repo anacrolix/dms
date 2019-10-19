@@ -138,8 +138,12 @@ func main() {
 	config.DeviceIcon = *deviceIcon
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
-	config.AllowedIps = strings.Split(*allowedIps, ",")
+	config.AllowedIps = parseAllowedIps(strings.Split(*allowedIps, ","))
+	if len(config.AllowedIps) > 0 {
+		log.Printf("allowed ips are %q", config.AllowedIps)
+	}
 
+	os.Exit(0)
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
 	}
@@ -307,4 +311,45 @@ func resizeImage(imageData image.Image, size uint) *bytes.Reader {
 	var buff bytes.Buffer
 	png.Encode(&buff, img)
 	return bytes.NewReader(buff.Bytes())
+}
+
+func parseAllowedIps(ipList []string) (newIpList []string) {
+	for _, ip := range ipList {
+		if strings.Contains(ip, "/") {
+			ips, err := expandCidr(ip)
+			if err != nil {
+				log.Printf("unable to expand cidr notation %q", ip)
+			} else {
+				newIpList = append(newIpList, ips...)
+			}
+		} else {
+			if net.ParseIP(ip) == nil {
+				log.Printf("not a valid IPv4 address %q", ip)
+			} else {
+				newIpList = append(newIpList, ip)
+			}
+		}
+	}
+	return
+}
+
+func expandCidr(cidr string) ([]string, error) {
+	ip, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+	var ips []string
+	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); inc(ip) {
+		ips = append(ips, ip.String())
+	}
+	return ips, nil
+}
+
+func inc(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
 }
