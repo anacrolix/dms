@@ -6,6 +6,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"image"
+	"image/png"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -21,6 +24,7 @@ import (
 
 	"github.com/anacrolix/dms/dlna/dms"
 	"github.com/anacrolix/dms/rrcache"
+	"github.com/nfnt/resize"
 )
 
 type dmsConfig struct {
@@ -28,6 +32,7 @@ type dmsConfig struct {
 	IfName              string
 	Http                string
 	FriendlyName        string
+	DeviceIcon          string
 	LogHeaders          bool
 	FFprobeCachePath    string
 	NoTranscode         bool
@@ -60,6 +65,7 @@ var config = &dmsConfig{
 	IfName:           "",
 	Http:             ":1338",
 	FriendlyName:     "",
+	DeviceIcon:       "",
 	LogHeaders:       false,
 	FFprobeCachePath: getDefaultFFprobeCachePath(),
 }
@@ -107,6 +113,7 @@ func main() {
 	ifName := flag.String("ifname", config.IfName, "specific SSDP network interface")
 	http := flag.String("http", config.Http, "http server port")
 	friendlyName := flag.String("friendlyName", config.FriendlyName, "server friendly name")
+	deviceIcon := flag.String("deviceIcon", config.DeviceIcon, "device icon")
 	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
@@ -128,6 +135,7 @@ func main() {
 	config.IfName = *ifName
 	config.Http = *http
 	config.FriendlyName = *friendlyName
+	config.DeviceIcon = *deviceIcon
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
 	config.AllowedIps = strings.Split(*allowedIps, ",")
@@ -187,14 +195,14 @@ func main() {
 				Height:     48,
 				Depth:      8,
 				Mimetype:   "image/png",
-				ReadSeeker: bytes.NewReader(MustAsset("data/VGC Sonic.png")),
+				ReadSeeker: readIcon(config.DeviceIcon, 48),
 			},
 			dms.Icon{
 				Width:      128,
 				Height:     128,
 				Depth:      8,
 				Mimetype:   "image/png",
-				ReadSeeker: bytes.NewReader(MustAsset("data/VGC Sonic 128.png")),
+				ReadSeeker: readIcon(config.DeviceIcon, 128),
 			},
 		},
 		StallEventSubscribe: config.StallEventSubscribe,
@@ -272,4 +280,31 @@ func (cache *fFprobeCache) save(path string) error {
 		os.Remove(f.Name())
 	}
 	return err
+}
+
+func getIconReader(path string) (io.ReadCloser, error) {
+	if path == "" {
+		return ioutil.NopCloser(bytes.NewReader(MustAsset("data/VGC Sonic.png"))), nil
+	}
+	return os.Open(path)
+}
+
+func readIcon(path string, size uint) *bytes.Reader {
+	r, err := getIconReader(path)
+	if err != nil {
+		panic(err)
+	}
+	defer r.Close()
+	imageData, _, err := image.Decode(r)
+	if err != nil {
+		panic(err)
+	}
+	return resizeImage(imageData, size)
+}
+
+func resizeImage(imageData image.Image, size uint) *bytes.Reader {
+	img := resize.Resize(size, size, imageData, resize.Lanczos3)
+	var buff bytes.Buffer
+	png.Encode(&buff, img)
+	return bytes.NewReader(buff.Bytes())
 }
