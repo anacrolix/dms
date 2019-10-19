@@ -8,6 +8,7 @@ import (
 	"flag"
 	"image"
 	"image/png"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -279,29 +280,27 @@ func (cache *fFprobeCache) save(path string) error {
 	return err
 }
 
-func readIcon(path string, size uint) *bytes.Reader {
+func getIconReader(path string) (io.ReadCloser, error) {
 	if path == "" {
-		log.Printf("read default device icon")
-			imageFile := bytes.NewReader(MustAsset("data/VGC Sonic.png"))
-			imageData, _, _ := image.Decode(imageFile)
-			return resizeImage(imageData, size)
+		return ioutil.NopCloser(bytes.NewReader(MustAsset("data/VGC Sonic.png"))), nil
 	}
-	log.Printf("read custom device icon %q", path)
-	imageFile, err := os.Open(path)
+	return os.Open(path)
+}
+
+func readIcon(path string, size uint) *bytes.Reader {
+	r, err := getIconReader(path)
 	if err != nil {
-		log.Printf("unable to open icon file %q", path)
-		readIcon("", size)
+		panic(err)
 	}
-	defer imageFile.Close()
-	imageData, _, err := image.Decode(imageFile)
+	defer r.Close()
+	imageData, _, err := image.Decode(r)
 	if err != nil {
-		log.Printf("unable to decode icon png file")
-		readIcon("", size)
+		panic(err)
 	}
 	return resizeImage(imageData, size)
 }
 
-func resizeImage(imageData image.Image, size uint) *bytes.Reader{
+func resizeImage(imageData image.Image, size uint) *bytes.Reader {
 	img := resize.Resize(size, size, imageData, resize.Lanczos3)
 	var buff bytes.Buffer
 	png.Encode(&buff, img)
