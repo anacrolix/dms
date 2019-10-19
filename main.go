@@ -143,7 +143,6 @@ func main() {
 		log.Printf("allowed ips are %q", config.AllowedIps)
 	}
 
-	os.Exit(0)
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
 	}
