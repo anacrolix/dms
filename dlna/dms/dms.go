@@ -782,7 +782,7 @@ func (s *Server) initServices() (err error) {
 	return
 }
 
-func (srv *Server) Serve() (err error) {
+func (srv *Server) Init() (err error) {
 	if err = srv.initServices(); err != nil {
 		return
 	}
@@ -852,6 +852,20 @@ func (srv *Server) Serve() (err error) {
 	log.Println("HTTP srv on", srv.HTTPConn.Addr())
 	srv.initMux(srv.httpServeMux)
 	srv.ssdpStopped = make(chan struct{})
+	return nil
+}
+
+// Deprecated: Use Init and then Run. There's a race calling Close on a Server that's had Serve
+// called on it.
+func (srv *Server) Serve() (err error) {
+	err = srv.Init()
+	if err != nil {
+		return
+	}
+	return srv.Run()
+}
+
+func (srv *Server) Run() (err error) {
 	go func() {
 		srv.doSSDP()
 		close(srv.ssdpStopped)
