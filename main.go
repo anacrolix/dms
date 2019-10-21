@@ -41,7 +41,7 @@ type dmsConfig struct {
 	NotifyInterval      time.Duration
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
-	AllowedIps          []string
+	AllowedIpNets       []*net.IPNet
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -138,10 +138,10 @@ func main() {
 	config.DeviceIcon = *deviceIcon
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
-	config.AllowedIps = parseAllowedIps(strings.Split(*allowedIps, ","))
-	if len(config.AllowedIps) > 0 {
-		log.Printf("allowed ips are %q", config.AllowedIps)
-	}
+	config.AllowedIpNets = makeIpNets(*allowedIps)
+	// if len(config.AllowedIps) > 0 {
+	log.Printf("allowed ip nets are %q", config.AllowedIpNets)
+	// }
 
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
@@ -212,7 +212,7 @@ func main() {
 		NotifyInterval:      config.NotifyInterval,
 		IgnoreHidden:        config.IgnoreHidden,
 		IgnoreUnreadable:    config.IgnoreUnreadable,
-		AllowedIps:          config.AllowedIps,
+		AllowedIpNets:       config.AllowedIpNets,
 	}
 	if err := dmsServer.Init(); err != nil {
 		log.Fatalf("error initing dms server: %v", err)
@@ -312,43 +312,32 @@ func resizeImage(imageData image.Image, size uint) *bytes.Reader {
 	return bytes.NewReader(buff.Bytes())
 }
 
-func parseAllowedIps(ipList []string) (newIpList []string) {
-	for _, ip := range ipList {
-		if strings.Contains(ip, "/") {
-			ips, err := expandCidr(ip)
-			if err != nil {
-				log.Printf("unable to expand cidr notation %q", ip)
+func makeIpNets(s string) []*net.IPNet {
+	var nets []*net.IPNet
+	if len(s) < 1 {
+		_, ipnet, _ := net.ParseCIDR("0.0.0.0/0")
+		nets = append(nets, ipnet)
+	} else {
+		for _, el := range strings.Split(s, ",") {
+			ip := net.ParseIP(el)
+
+			if ip == nil {
+				_, ipnet, err := net.ParseCIDR(el)
+				if err == nil {
+					nets = append(nets, ipnet)
+				} else {
+					log.Printf("unable to parse expression %q", el)
+				}
+
 			} else {
-				newIpList = append(newIpList, ips...)
-			}
-		} else {
-			if net.ParseIP(ip) == nil {
-				log.Printf("not a valid IPv4 address %q", ip)
-			} else {
-				newIpList = append(newIpList, ip)
+				_, ipnet, err := net.ParseCIDR(el + "/32")
+				if err == nil {
+					nets = append(nets, ipnet)
+				} else {
+					log.Printf("unable to parse ip %q", el)
+				}
 			}
 		}
 	}
-	return
-}
-
-func expandCidr(cidr string) ([]string, error) {
-	ip, ipnet, err := net.ParseCIDR(cidr)
-	if err != nil {
-		return nil, err
-	}
-	var ips []string
-	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); inc(ip) {
-		ips = append(ips, ip.String())
-	}
-	return ips, nil
-}
-
-func inc(ip net.IP) {
-	for j := len(ip) - 1; j >= 0; j-- {
-		ip[j]++
-		if ip[j] > 0 {
-			break
-		}
-	}
+	return nets
 }
