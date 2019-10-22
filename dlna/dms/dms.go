@@ -244,7 +244,7 @@ type Server struct {
 	// Ingnore unreadable files and directories
 	IgnoreUnreadable bool
 	// White list of clients
-	AllowedIps []string
+	AllowedIpNets []*net.IPNet
 }
 
 // UPnP SOAP service.
@@ -526,19 +526,17 @@ func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte
 
 // Handle a service control HTTP request.
 func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) {
-	if len(me.AllowedIps) > 0 {
-		clientIp := r.RemoteAddr
-		found := false
-		for _, allowedIp := range me.AllowedIps {
-			if strings.Contains(clientIp, allowedIp) {
-				found = true
-			}
+	found := false
+	clientIp, _, _ := net.SplitHostPort(r.RemoteAddr)
+	for _, ipnet := range me.AllowedIpNets {
+		if ipnet.Contains(net.ParseIP(clientIp)) {
+			found = true
 		}
-		if !found {
-			log.Printf("not allowed client %s, %+v", clientIp, me.AllowedIps)
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+	}
+	if !found {
+		log.Printf("not allowed client %s, %+v", clientIp, me.AllowedIpNets)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 	soapActionString := r.Header.Get("SOAPACTION")
 	soapAction, err := upnp.ParseActionHTTPHeader(soapActionString)

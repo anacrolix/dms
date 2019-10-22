@@ -41,7 +41,7 @@ type dmsConfig struct {
 	NotifyInterval      time.Duration
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
-	AllowedIps          []string
+	AllowedIpNets       []*net.IPNet
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -138,7 +138,10 @@ func main() {
 	config.DeviceIcon = *deviceIcon
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
-	config.AllowedIps = strings.Split(*allowedIps, ",")
+	config.AllowedIpNets = makeIpNets(*allowedIps)
+	// if len(config.AllowedIps) > 0 {
+	log.Printf("allowed ip nets are %q", config.AllowedIpNets)
+	// }
 
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
@@ -209,7 +212,7 @@ func main() {
 		NotifyInterval:      config.NotifyInterval,
 		IgnoreHidden:        config.IgnoreHidden,
 		IgnoreUnreadable:    config.IgnoreUnreadable,
-		AllowedIps:          config.AllowedIps,
+		AllowedIpNets:       config.AllowedIpNets,
 	}
 	if err := dmsServer.Init(); err != nil {
 		log.Fatalf("error initing dms server: %v", err)
@@ -307,4 +310,34 @@ func resizeImage(imageData image.Image, size uint) *bytes.Reader {
 	var buff bytes.Buffer
 	png.Encode(&buff, img)
 	return bytes.NewReader(buff.Bytes())
+}
+
+func makeIpNets(s string) []*net.IPNet {
+	var nets []*net.IPNet
+	if len(s) < 1 {
+		_, ipnet, _ := net.ParseCIDR("0.0.0.0/0")
+		nets = append(nets, ipnet)
+	} else {
+		for _, el := range strings.Split(s, ",") {
+			ip := net.ParseIP(el)
+
+			if ip == nil {
+				_, ipnet, err := net.ParseCIDR(el)
+				if err == nil {
+					nets = append(nets, ipnet)
+				} else {
+					log.Printf("unable to parse expression %q", el)
+				}
+
+			} else {
+				_, ipnet, err := net.ParseCIDR(el + "/32")
+				if err == nil {
+					nets = append(nets, ipnet)
+				} else {
+					log.Printf("unable to parse ip %q", el)
+				}
+			}
+		}
+	}
+	return nets
 }
