@@ -36,6 +36,7 @@ type dmsConfig struct {
 	LogHeaders          bool
 	FFprobeCachePath    string
 	NoTranscode         bool
+	ForceTranscodeTo    string
 	NoProbe             bool
 	StallEventSubscribe bool
 	NotifyInterval      time.Duration
@@ -68,6 +69,7 @@ var config = &dmsConfig{
 	DeviceIcon:       "",
 	LogHeaders:       false,
 	FFprobeCachePath: getDefaultFFprobeCachePath(),
+	ForceTranscodeTo: "",
 }
 
 func getDefaultFFprobeCachePath() (path string) {
@@ -118,6 +120,7 @@ func main() {
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
 	allowedIps := flag.String("allowedIps", "", "allowed ip of clients, separated by comma")
+	forceTranscodeTo := flag.String("forceTranscodeTo", config.ForceTranscodeTo, "force transcoding to certain format, supported: 'chromecast', 'vp8'")
 	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
 	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
 	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
@@ -139,6 +142,7 @@ func main() {
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
 	config.AllowedIpNets = makeIpNets(*allowedIps)
+	config.ForceTranscodeTo = *forceTranscodeTo
 	// if len(config.AllowedIps) > 0 {
 	log.Printf("allowed ip nets are %q", config.AllowedIpNets)
 	// }
@@ -186,12 +190,13 @@ func main() {
 			}
 			return conn
 		}(),
-		FriendlyName:   config.FriendlyName,
-		RootObjectPath: filepath.Clean(config.Path),
-		FFProbeCache:   cache,
-		LogHeaders:     config.LogHeaders,
-		NoTranscode:    config.NoTranscode,
-		NoProbe:        config.NoProbe,
+		FriendlyName:     config.FriendlyName,
+		RootObjectPath:   filepath.Clean(config.Path),
+		FFProbeCache:     cache,
+		LogHeaders:       config.LogHeaders,
+		NoTranscode:      config.NoTranscode,
+		ForceTranscodeTo: config.ForceTranscodeTo,
+		NoProbe:          config.NoProbe,
 		Icons: []dms.Icon{
 			dms.Icon{
 				Width:      48,

@@ -231,6 +231,8 @@ type Server struct {
 	LogHeaders bool
 	// Disable transcoding, and the resource elements implied in the CDS.
 	NoTranscode bool
+	// Force transcoding to certain format of the 'transcodes' map
+	ForceTranscodeTo string
 	// Disable media probing with ffprobe
 	NoProbe bool
 	Icons   []Icon
@@ -728,7 +730,12 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			http.Error(w, "no such object", http.StatusNotFound)
 			return
 		}
-		k := r.URL.Query().Get("transcode")
+		var k string
+		if server.ForceTranscodeTo != "" {
+			k = server.ForceTranscodeTo
+		} else {
+			k = r.URL.Query().Get("transcode")
+		}
 		if k == "" {
 			mimeType, err := MimeTypeByPath(filePath)
 			if err != nil {
