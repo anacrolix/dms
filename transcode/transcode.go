@@ -125,7 +125,7 @@ func ChromecastTranscode(path string, start, length time.Duration, stderr io.Wri
 		"-ss", FormatDurationSexagesimal(start),
 		"-i", path,
 		"-c:v", "libx264", "-preset", "ultrafast", "-profile:v", "high", "-level", "5.0",
-		"-movflags", "+faststart",
+		"-movflags", "+faststart+frag_keyframe+empty_moov",
 	}
 	if length > 0 {
 		args = append(args, []string{
