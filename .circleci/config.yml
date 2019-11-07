@@ -35,8 +35,6 @@ jobs:
       - run: echo 'export PATH="/usr/local/go.local/bin:$PATH"' >> $BASH_ENV
       - run: go version
       - checkout
-      - run: sudo apt-get update
-      # - run: sudo apt install fuse pv
       - restore_cache:
           keys:
             - go-pkg-
@@ -52,7 +50,6 @@ jobs:
           key: go-pkg-{{ checksum "go.mod" }}
           paths:
             - ~/go/pkg
-      - run: cd dms-gtk-gui && go build
       - save_cache:
           key: go-cache-{{ .Revision }}
           paths:
