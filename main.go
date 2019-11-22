@@ -134,7 +134,7 @@ func main() {
 		log.Fatalf("%s: %s\n", "unexpected positional arguments", flag.Args())
 	}
 
-	config.Path = *path
+	config.Path, _ = filepath.Abs(*path)
 	config.IfName = *ifName
 	config.Http = *http
 	config.FriendlyName = *friendlyName
