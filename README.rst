@@ -30,6 +30,11 @@ To run::
 
     $ "$GOPATH"/bin/dms
 
+Running DMS as a service
+========================
+
+A sample systemd `.service` file has been [provided](systemd/dms.service) to assist in running DMS as a system service.
+
 Known Compatible Players and Renderers
 ======================================
 
