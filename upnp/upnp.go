@@ -41,6 +41,9 @@ type SoapAction struct {
 }
 
 func ParseActionHTTPHeader(s string) (ret SoapAction, err error) {
+	if len(s) < 3 {
+		return
+	}
 	if s[0] != '"' || s[len(s)-1] != '"' {
 		return
 	}
