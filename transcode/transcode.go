@@ -137,3 +137,26 @@ func ChromecastTranscode(path string, start, length time.Duration, stderr io.Wri
 		"pipe:"}...)
 	return transcodePipe(args, stderr)
 }
+
+// Returns a stream of h264 video and mp3 audio
+func WebTranscode(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error) {
+	args := []string{
+		"ffmpeg",
+		"-ss", FormatDurationSexagesimal(start),
+		"-i", path,
+		"-pix_fmt", "yuv420p",
+		"-c:v", "libx264", "-crf", "25",
+		"-c:a", "mp3", "-ab", "128k", "-ar", "44100",
+		"-preset", "ultrafast",
+		"-movflags", "+faststart+frag_keyframe+empty_moov",
+	}
+	if length > 0 {
+		args = append(args, []string{
+			"-t", FormatDurationSexagesimal(length),
+		}...)
+	}
+	args = append(args, []string{
+		"-f", "mp4",
+		"pipe:"}...)
+	return transcodePipe(args, stderr)
+}

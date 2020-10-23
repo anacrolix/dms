@@ -120,7 +120,7 @@ func main() {
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
 	allowedIps := flag.String("allowedIps", "", "allowed ip of clients, separated by comma")
-	forceTranscodeTo := flag.String("forceTranscodeTo", config.ForceTranscodeTo, "force transcoding to certain format, supported: 'chromecast', 'vp8'")
+	forceTranscodeTo := flag.String("forceTranscodeTo", config.ForceTranscodeTo, "force transcoding to certain format, supported: 'chromecast', 'vp8', 'web'")
 	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
 	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
 	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
