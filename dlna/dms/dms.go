@@ -737,8 +737,8 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		} else {
 			k = r.URL.Query().Get("transcode")
 		}
-		if k == "" {
-			mimeType, err := MimeTypeByPath(filePath)
+		mimeType, err := MimeTypeByPath(filePath)
+		if k == "" || mimeType.IsImage() {
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
