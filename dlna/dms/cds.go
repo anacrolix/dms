@@ -137,6 +137,17 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		if !me.NoTranscode {
 			item.Res = append(item.Res, transcodeResources(host, cdsObject.Path, resolution, resDuration)...)
 		}
+		item.Res = append(item.Res, upnpav.Resource{
+			URL: (&url.URL{
+				Scheme: "http",
+				Host:   host,
+				Path:   subtitlePath,
+				RawQuery: url.Values{
+					"path": {cdsObject.Path},
+				}.Encode(),
+			}).String(),
+			ProtocolInfo: "http-get:*:text/plain",
+		})
 	}
 	if mimeType.IsVideo() || mimeType.IsImage() {
 		item.Res = append(item.Res, upnpav.Resource{
