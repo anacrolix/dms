@@ -531,6 +531,10 @@ func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte
 func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) {
 	found := false
 	clientIp, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if zoneDelimiterIdx := strings.Index(clientIp, "%"); zoneDelimiterIdx != -1 {
+		// IPv6 addresses may have the form address%zone (e.g. ::1%eth0)
+		clientIp = clientIp[:zoneDelimiterIdx]
+	}
 	for _, ipnet := range me.AllowedIpNets {
 		if ipnet.Contains(net.ParseIP(clientIp)) {
 			found = true

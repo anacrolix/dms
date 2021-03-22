@@ -322,7 +322,7 @@ func makeIpNets(s string) []*net.IPNet {
 	if len(s) < 1 {
 		_, ipnet, _ := net.ParseCIDR("0.0.0.0/0")
 		nets = append(nets, ipnet)
-		_, ipnet, _ = net.ParseCIDR("0:0:0::/128")
+		_, ipnet, _ = net.ParseCIDR("::/0")
 		nets = append(nets, ipnet)
 	} else {
 		for _, el := range strings.Split(s, ",") {
