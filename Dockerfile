@@ -8,7 +8,8 @@ RUN \
       ffmpegthumbnailer \
   && \
   apt-get clean && \
-  rm -rf /var/lib/apt/lists/*
+  rm -rf /var/lib/apt/lists/* && \
+  touch /root/.dms-ffprobe-cache
 
 COPY . /go/src/github.com/anacrolix/dms/
 WORKDIR /go/src/github.com/anacrolix/dms/
