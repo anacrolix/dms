@@ -33,12 +33,12 @@ To run::
 Running DMS as a systemd service
 =================================
 
-A sample systemd `.service` file has been [provided](systemd/dms.service) to assist in running DMS as a system service.
+A sample systemd `.service` file has been `provided <helpers/systemd/dms.service>`_ to assist in running DMS as a system service.
 
 Running DMS as a FreeBSD service
 ================================
 
-Install the rc.d/dms service file to /etc/rc.d or /usr/local/etc/rc.d
+Install the `provided <helpers/bsd/dms>`_ service file to /etc/rc.d or /usr/local/etc/rc.d
 add ``dms_enable="YES"``, and optionally ``dms_root="/path/to/my/media"`` and ``dms_user="myuser"`` to your /etc/rc.conf
 
 Known Compatible Players and Renderers
