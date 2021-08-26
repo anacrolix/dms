@@ -111,6 +111,8 @@ func (me *Server) serve() {
 		size := me.Interface.MTU
 		if size > 65536 {
 			size = 65536
+		} else if size <= 0 { // fix for windows with mtu 4gb
+			size = 65536
 		}
 		b := make([]byte, size)
 		n, addr, err := me.conn.ReadFromUDP(b)
