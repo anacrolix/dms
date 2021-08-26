@@ -108,7 +108,11 @@ func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
 
 func (me *Server) serve() {
 	for {
-		b := make([]byte, me.Interface.MTU)
+		size := me.Interface.MTU
+		if size > 65536 {
+			size = 65536
+		}
+		b := make([]byte, size)
 		n, addr, err := me.conn.ReadFromUDP(b)
 		select {
 		case <-me.closed:
@@ -153,8 +157,8 @@ func (me *Server) Serve() (err error) {
 				panic(fmt.Sprint("unexpected addr type:", addr))
 			}()
 			extraHdrs := [][2]string{
-				{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2/time.Second)},
-				{"LOCATION", me.Location(ip)},
+				{"Cache-Control", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2/time.Second)},
+				{"Location", me.Location(ip)},
 			}
 			me.notifyAll(aliveNTS, extraHdrs)
 		}
