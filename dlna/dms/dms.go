@@ -87,7 +87,7 @@ var services = []*service{
 	},
 	// {
 	// 	Service: upnp.Service{
-	// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:3",
+	// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
 	// 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
 	// 	},
 	// 	SCPD: connectionManagerServiceDesc,
@@ -559,7 +559,7 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	//AwoX/1.1 UPnP/1.0 DLNADOC/1.50
-	//log.Println(r.UserAgent())
+	log.Println(r.UserAgent())
 	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 	w.Header().Set("Ext", "")
 	w.Header().Set("Server", serverField)
@@ -587,19 +587,22 @@ func (s *Server) filePath(_path string) string {
 }
 
 func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
-	filePath := me.filePath(r.URL.Query().Get("path"))
-	c := r.URL.Query().Get("c")
-	if c == "" {
-		c = "png"
-	}
-	cmd := exec.Command("ffmpegthumbnailer", "-i", filePath, "-o", "/dev/stdout", "-c"+c)
-	// cmd.Stderr = os.Stderr
-	body, err := cmd.Output()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
+//	filePath := me.filePath(r.URL.Query().Get("path"))  
+//	c := r.URL.Query().Get("c")  
+//	if c == "" {  
+//		c = "png"  
+//	}  
+//	cmd := exec.Command("ffmpegthumbnailer", "-i", filePath, "-o", "/dev/stdout", "-c"+c)  
+//	// cmd.Stderr = os.Stderr  
+//	body, err := cmd.Output()  
+//	if err != nil {  
+//		http.Error(w, err.Error(), http.StatusInternalServerError)  
+//		return  
+//	}  
+//	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))  
+	// 1st DI
+	w.Header().Set("Content-Type", server.Icons[0].Mimetype)
+	http.ServeContent(w, r, "", time.Time{}, server.Icons[0].ReadSeeker)
 }
 
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
