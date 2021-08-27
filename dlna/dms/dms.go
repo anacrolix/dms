@@ -37,7 +37,7 @@ const (
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
-	//contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
+	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	serviceControlURL           = "/ctl"
 	deviceIconPath              = "/deviceIcon"
@@ -85,13 +85,13 @@ var services = []*service{
 		},
 		SCPD: contentDirectoryServiceDescription,
 	},
-	{
-	 	Service: upnp.Service{
-	 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
-	 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-	 	},
-	 	SCPD: connectionManagerServiceDesc,
-	},
+	// {
+	// 	Service: upnp.Service{
+	// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
+	// 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+	// 	},
+	// 	SCPD: connectionManagerServiceDesc,
+	// },
 }
 
 // The control URL for every service is the same. We're able to infer the desired service from the request headers.
