@@ -559,7 +559,7 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	//AwoX/1.1 UPnP/1.0 DLNADOC/1.50
-	log.Println(r.UserAgent())
+	//log.Println(r.UserAgent())
 	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 	w.Header().Set("Ext", "")
 	w.Header().Set("Server", serverField)
