@@ -716,19 +716,19 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 }
 
 func (server *Server) initMux(mux *http.ServeMux) {
-	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		resp.Header().Set("content-type", "text/html")
-		err := rootTmpl.Execute(resp, struct {
-			Readonly bool
-			Path     string
-		}{
-			true,
-			server.RootObjectPath,
-		})
-		if err != nil {
-			log.Println(err)
-		}
-	})
+//	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {  
+//		resp.Header().Set("content-type", "text/html")  
+//		err := rootTmpl.Execute(resp, struct {  
+//			Readonly bool  
+//			Path     string  
+//		}{  
+//			true,  
+//			server.RootObjectPath,  
+//		})  
+//		if err != nil {  
+//			log.Println(err)  
+//		}  
+//	})  
 	mux.HandleFunc(contentDirectoryEventSubURL, server.contentDirectoryEventSubHandler)
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
