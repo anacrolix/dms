@@ -14,7 +14,7 @@ import (
 	"net/http/pprof"
 	"net/url"
 	"os"
-	"os/exec"
+//	"os/exec"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -601,8 +601,8 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 //	}  
 //	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))  
 	// 1st DI
-	w.Header().Set("Content-Type", server.Icons[0].Mimetype)
-	http.ServeContent(w, r, "", time.Time{}, server.Icons[0].ReadSeeker)
+	w.Header().Set("Content-Type", me.Icons[0].Mimetype)
+	http.ServeContent(w, r, "", time.Time{}, me.Icons[0].ReadSeeker)
 }
 
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
