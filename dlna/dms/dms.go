@@ -842,13 +842,8 @@ func (srv *Server) Init() (err error) {
 				DeviceType:   rootDeviceType,
 				FriendlyName: srv.FriendlyName,
 				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
-				ManufacturerURL: "https://github.com/anacrolix/dms",
 				ModelName:    rootDeviceModelName,
-				ModelNumber:  "1.0",
-				ModelURL:     "https://github.com/YouROK/TorrServer",
-				SerialNumber: "0123456789",
 				UDN:          srv.rootDeviceUUID,
-				UPC:          "",
 				PresentationURL: "/",
 				ServiceList: func() (ss []upnp.Service) {
 					for _, s := range services {
@@ -869,7 +864,6 @@ func (srv *Server) Init() (err error) {
 					return
 				}(),
 			},
-			URLBase: "http://" + srv.HTTPConn.Addr().(*net.TCPAddr).IP.String() + ":" + string(srv.httpPort()),
 		},
 		" ", "  ")
 	if err != nil {
