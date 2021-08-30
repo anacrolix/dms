@@ -37,7 +37,7 @@ const (
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
-	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
+//	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	serviceControlURL           = "/ctl"
 	deviceIconPath              = "/deviceIcon"
@@ -84,6 +84,13 @@ var services = []*service{
 			EventSubURL: contentDirectoryEventSubURL,
 		},
 		SCPD: contentDirectoryServiceDescription,
+	},
+	{
+	 	Service: upnp.Service{
+	 		ServiceType: "urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1",
+	 		ServiceId:   "urn:microsoft.com:serviceId:X_MS_MediaReceiverRegistrar",
+	 	},
+	 	SCPD: mediaReceiverRegistrarDescription,
 	},
 	// {
 	// 	Service: upnp.Service{
@@ -776,12 +783,19 @@ func (server *Server) initMux(mux *http.ServeMux) {
 }
 
 func (s *Server) initServices() (err error) {
-	urn, err := upnp.ParseServiceType(services[0].ServiceType)
+	urn1, err := upnp.ParseServiceType(services[0].ServiceType)
+	if err != nil {
+		return
+	}
+	urn2, err := upnp.ParseServiceType(services[1].ServiceType)
 	if err != nil {
 		return
 	}
 	s.services = map[string]UPnPService{
-		urn.Type: &contentDirectoryService{
+		urn1.Type: &contentDirectoryService{
+			Server: s,
+		},
+		urn2.Type: &mediaReceiverRegistrarService{
 			Server: s,
 		},
 	}
