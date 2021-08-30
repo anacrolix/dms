@@ -62,6 +62,14 @@ type SpecVersion struct {
 	Minor int `xml:"minor"`
 }
 
+type URLBase struct {
+	URLBase string `xml:"urlbase"`
+}
+
+type PresentationURL struct {
+	PresentationURL string `xml:"presentationURL"`
+}
+
 type Icon struct {
 	Mimetype string `xml:"mimetype"`
 	Width    int    `xml:"width"`
@@ -83,16 +91,23 @@ type Device struct {
 	DeviceType   string `xml:"deviceType"`
 	FriendlyName string `xml:"friendlyName"`
 	Manufacturer string `xml:"manufacturer"`
+	ManufacturerURL string `xml:"manufacturerURL"`
 	ModelName    string `xml:"modelName"`
+	ModelNumber  string `xml:"modelNumber"`
+	ModelURL     string `xml:"modelURL"`
+	SerialNumber string `xml:"serialNumber"`
 	UDN          string
+	UPC          string
 	IconList     []Icon    `xml:"iconList>icon"`
 	ServiceList  []Service `xml:"serviceList>service"`
+	PresentationURL string `xml:"presentationURL"`
 }
 
 type DeviceDesc struct {
 	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:device-1-0 root"`
 	SpecVersion SpecVersion `xml:"specVersion"`
 	Device      Device      `xml:"device"`
+	URLBase     string      `xml:"URLBase"`
 }
 
 type Error struct {
