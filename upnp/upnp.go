@@ -89,7 +89,6 @@ type Device struct {
 	UDN          string
 	IconList     []Icon    `xml:"iconList>icon"`
 	ServiceList  []Service `xml:"serviceList>service"`
-	PresentationURL string `xml:"presentationURL"`
 }
 
 type DeviceDesc struct {
