@@ -253,7 +253,6 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		log.Println(err)
 		return
 	}
-	log.Printf("handle req: ", req)
 	if req.Method != "M-SEARCH" || req.Header.Get("man") != `"ssdp:discover"` {
 		return
 	}
@@ -269,6 +268,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	} else {
 		mx = 1
 	}
+	log.Printf("handle req: ", req)
 	types := func(st string) []string {
 		if st == "ssdp:all" {
 			return me.allTypes()
@@ -306,6 +306,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		for _, type_ := range types {
 			resp := me.makeResponse(ip, type_, req)
 			delay := time.Duration(rand.Int63n(int64(time.Second) * int64(mx)))
+	    log.Printf("handle resp: ", resp)
 			me.delayedSend(delay, resp, sender)
 		}
 	}
