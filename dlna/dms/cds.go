@@ -45,13 +45,9 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		ParentID:   cdsObject.ParentID(),
 	}
 	if fileInfo.IsDir() {
-		defaultChildCount := 1
 		obj.Class = "object.container.storageFolder"
 		obj.Title = fileInfo.Name()
-		ret = upnpav.Container{
-			Object: obj,
-			ChildCount: defaultChildCount,
-		}
+		ret = upnpav.Container{Object: obj}
 		return
 	}
 	if !fileInfo.Mode().IsRegular() {
@@ -303,19 +299,6 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 		return map[string]string{
 			"SearchCaps": "",
 		}, nil
-	// Samsung Extensions
-	case "X_GetFeatureList":
-		return map[string]string{
-			"FeatureList": `<Features xmlns="urn:schemas-upnp-org:av:avs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:schemas-upnp-org:av:avs http://www.upnp.org/schemas/av/avs.xsd">
-				<Feature name="samsung.com_BASICVIEW" version="1">
-					<container id="0" type="object.item.imageItem"/>
-					<container id="0" type="object.item.audioItem"/>
-					<container id="0" type="object.item.videoItem"/>
-				</Feature>
-			</Features>`}, nil
-	case "X_SetBookmark":
-		// just ignore
-		return map[string]string{}, nil
 	default:
 		return nil, upnp.InvalidActionError
 	}
