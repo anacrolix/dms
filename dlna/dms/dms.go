@@ -37,7 +37,6 @@ const (
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
-//	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	serviceControlURL           = "/ctl"
 	deviceIconPath              = "/deviceIcon"
@@ -87,18 +86,18 @@ var services = []*service{
 	},
 	{
 	 	Service: upnp.Service{
+	 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
+	 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+	 	},
+	 	SCPD: connectionManagerServiceDesc,
+	},
+	{
+	 	Service: upnp.Service{
 	 		ServiceType: "urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1",
 	 		ServiceId:   "urn:microsoft.com:serviceId:X_MS_MediaReceiverRegistrar",
 	 	},
 	 	SCPD: mediaReceiverRegistrarDescription,
 	},
-	// {
-	// 	Service: upnp.Service{
-	// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
-	// 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-	// 	},
-	// 	SCPD: connectionManagerServiceDesc,
-	// },
 }
 
 // The control URL for every service is the same. We're able to infer the desired service from the request headers.
@@ -784,16 +783,23 @@ func (server *Server) initMux(mux *http.ServeMux) {
 }
 
 func (s *Server) initServices() (err error) {
-	urn1, err := upnp.ParseServiceType(services[0].ServiceType)
+	urn, err := upnp.ParseServiceType(services[0].ServiceType)
 	if err != nil {
 		return
 	}
-	urn2, err := upnp.ParseServiceType(services[1].ServiceType)
+	urn1, err := upnp.ParseServiceType(services[1].ServiceType)
+	if err != nil {
+		return
+	}
+	urn2, err := upnp.ParseServiceType(services[2].ServiceType)
 	if err != nil {
 		return
 	}
 	s.services = map[string]UPnPService{
-		urn1.Type: &contentDirectoryService{
+		urn.Type: &contentDirectoryService{
+			Server: s,
+		},
+		urn1.Type: &connectionManagerService{
 			Server: s,
 		},
 		urn2.Type: &mediaReceiverRegistrarService{
