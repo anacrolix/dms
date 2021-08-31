@@ -306,7 +306,6 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		for _, type_ := range types {
 			resp := me.makeResponse(ip, type_, req)
 			delay := time.Duration(rand.Int63n(int64(time.Second) * int64(mx)))
-	    log.Printf("handle resp: ", resp)
 			me.delayedSend(delay, resp, sender)
 		}
 	}
@@ -330,6 +329,7 @@ func (me *Server) makeResponse(ip net.IP, targ string, req *http.Request) (ret [
 	} {
 		resp.Header.Set(pair[0], pair[1])
 	}
+	log.Printf("makeResponse: ", resp)
 	buf := &bytes.Buffer{}
 	if err := resp.Write(buf); err != nil {
 		panic(err)
