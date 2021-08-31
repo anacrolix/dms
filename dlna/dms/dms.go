@@ -671,7 +671,8 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 	}
 }
 
-var eventingLogger = log.New(ioutil.Discard, "", 0)
+//var eventingLogger = log.New(ioutil.Discard, "", 0)
+var eventingLogger = log.New(os.Stderr, "EVENT: ", log.Ldate|log.Ltime|log.Lshortfile)
 
 func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *http.Request) {
 	if server.StallEventSubscribe {
