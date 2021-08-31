@@ -253,6 +253,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		log.Println(err)
 		return
 	}
+	log.Printf("handle req: ", req)
 	if req.Method != "M-SEARCH" || req.Header.Get("man") != `"ssdp:discover"` {
 		return
 	}

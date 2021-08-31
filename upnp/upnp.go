@@ -34,7 +34,7 @@ func ParseServiceType(s string) (ret ServiceURN, err error) {
 	ret.Auth = matches[1]
 	ret.Type = matches[2]
 	ret.Version, err = strconv.ParseUint(matches[3], 0, 0)
-	log.Printf("ParseServiceType:", s, "ret: %+v", ret, "err:", err)
+	log.Printf("ParseServiceType: ", s, "ret: ", ret, "err: ", err)
 	return
 }
 
@@ -44,6 +44,7 @@ type SoapAction struct {
 }
 
 func ParseActionHTTPHeader(s string) (ret SoapAction, err error) {
+	log.Printf("ParseActionHTTPHeader: ", s)
 	if len(s) < 3 {
 		return
 	}
@@ -57,7 +58,7 @@ func ParseActionHTTPHeader(s string) (ret SoapAction, err error) {
 	}
 	ret.Action = s[hashIndex+1:]
 	ret.ServiceURN, err = ParseServiceType(s[:hashIndex])
-	log.Printf("ParseActionHTTPHeader:", s, "ret: %+v", ret, "err:", err)
+	log.Printf("ParseActionHTTPHeader: ", s, "ret: ", ret, "err: ", err)
 	return
 }
 
