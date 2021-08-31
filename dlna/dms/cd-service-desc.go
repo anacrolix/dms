@@ -347,6 +347,41 @@ const contentDirectoryServiceDescription = `<?xml version="1.0"?>
         </argument>
       </argumentList>
     </action>
+		<action>
+			<name>X_GetFeatureList</name>
+			<argumentList>
+				<argument>
+					<name>FeatureList</name>
+					<direction>out</direction>
+					<relatedStateVariable>A_ARG_TYPE_Featurelist</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<name>X_SetBookmark</name>
+			<argumentList>
+				<argument>
+					<name>CategoryType</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_CategoryType</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>RID</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_RID</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>ObjectID</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_ObjectID</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>PosSecond</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_PosSec</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
   </actionList>
   <serviceStateTable>
     <stateVariable sendEvents="no">
@@ -447,5 +482,25 @@ const contentDirectoryServiceDescription = `<?xml version="1.0"?>
       <name>A_ARG_TYPE_URI</name>
       <dataType>uri</dataType>
     </stateVariable>
+    <stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_CategoryType</name>
+			<dataType>ui4</dataType>
+			<defaultValue />
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_RID</name>
+			<dataType>ui4</dataType>
+			<defaultValue />
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_PosSec</name>
+			<dataType>ui4</dataType>
+			<defaultValue />
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_Featurelist</name>
+			<dataType>string</dataType>
+			<defaultValue />
+		</stateVariable>
   </serviceStateTable>
 </scpd>`
