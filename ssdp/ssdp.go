@@ -268,7 +268,6 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	} else {
 		mx = 1
 	}
-	log.Printf("handle req: ", req)
 	types := func(st string) []string {
 		if st == "ssdp:all" {
 			return me.allTypes()
@@ -329,7 +328,6 @@ func (me *Server) makeResponse(ip net.IP, targ string, req *http.Request) (ret [
 	} {
 		resp.Header.Set(pair[0], pair[1])
 	}
-	log.Printf("makeResponse: ", resp)
 	buf := &bytes.Buffer{}
 	if err := resp.Write(buf); err != nil {
 		panic(err)
