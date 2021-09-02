@@ -14,7 +14,7 @@ import (
 	"net/http/pprof"
 	"net/url"
 	"os"
-//	"os/exec"
+	"os/exec"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -33,7 +33,7 @@ import (
 const (
 	serverField                 = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
 	rootDeviceType              = "urn:schemas-upnp-org:device:MediaServer:1"
-	rootDeviceModelName         = "DMS 1.0"
+	rootDeviceModelName         = "dms 1.0"
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
@@ -89,7 +89,7 @@ var services = []*service{
 	 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
 	 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
 	 	},
-	 	SCPD: connectionManagerServiceDesc,
+	 	SCPD: connectionManagerServiceDescription,
 	},
 	{
 	 	Service: upnp.Service{
@@ -593,22 +593,19 @@ func (s *Server) filePath(_path string) string {
 }
 
 func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
-//	filePath := me.filePath(r.URL.Query().Get("path"))  
-//	c := r.URL.Query().Get("c")  
-//	if c == "" {  
-//		c = "png"  
-//	}  
-//	cmd := exec.Command("ffmpegthumbnailer", "-i", filePath, "-o", "/dev/stdout", "-c"+c)  
-//	// cmd.Stderr = os.Stderr  
-//	body, err := cmd.Output()  
-//	if err != nil {  
-//		http.Error(w, err.Error(), http.StatusInternalServerError)  
-//		return  
-//	}  
-//	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))  
-	// 1st DI
-	w.Header().Set("Content-Type", me.Icons[0].Mimetype)
-	http.ServeContent(w, r, "", time.Time{}, me.Icons[0].ReadSeeker)
+	filePath := me.filePath(r.URL.Query().Get("path"))
+	c := r.URL.Query().Get("c")
+	if c == "" {
+		c = "png"
+	}
+	cmd := exec.Command("ffmpegthumbnailer", "-i", filePath, "-o", "/dev/stdout", "-c"+c)
+	// cmd.Stderr = os.Stderr
+	body, err := cmd.Output()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
 }
 
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
@@ -721,10 +718,19 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 	}
 }
 
-func (server *Server) initMux(mux *http.ServeMux) { 
-	mux.HandleFunc(deviceIconPath, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", server.Icons[0].Mimetype)
-		http.ServeContent(w, r, "", time.Time{}, server.Icons[0].ReadSeeker)
+func (server *Server) initMux(mux *http.ServeMux) {
+	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
+		resp.Header().Set("content-type", "text/html")
+		err := rootTmpl.Execute(resp, struct {
+			Readonly bool
+			Path     string
+		}{
+			true,
+			server.RootObjectPath,
+		})
+		if err != nil {
+			log.Println(err)
+		}
 	})
 	mux.HandleFunc(contentDirectoryEventSubURL, server.contentDirectoryEventSubHandler)
 	mux.HandleFunc(iconPath, server.serveIcon)
@@ -843,6 +849,8 @@ func (srv *Server) Init() (err error) {
 	srv.rootDeviceUUID = makeDeviceUuid(srv.FriendlyName)
 	srv.rootDescXML, err = xml.MarshalIndent(
 		upnp.DeviceDesc{
+			NSDLNA: "urn:schemas-dlna-org:device-1-0",
+			NSSEC: "http://www.sec.co.kr/dlna",
 			SpecVersion: upnp.SpecVersion{Major: 1, Minor: 0},
 			Device: upnp.Device{
 				DeviceType:   rootDeviceType,
@@ -850,6 +858,12 @@ func (srv *Server) Init() (err error) {
 				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
 				ModelName:    rootDeviceModelName,
 				UDN:          srv.rootDeviceUUID,
+				VendorXML: `    <dlna:X_DLNACAP/>
+    <dlna:X_DLNADOC>DMS-1.50</dlna:X_DLNADOC>
+    <dlna:X_DLNADOC>M-DMS-1.50</dlna:X_DLNADOC>
+    <sec:ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:ProductCap>
+    <sec:X_ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:X_ProductCap>
+`,
 				ServiceList: func() (ss []upnp.Service) {
 					for _, s := range services {
 						ss = append(ss, s.Service)

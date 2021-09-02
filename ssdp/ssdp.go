@@ -159,8 +159,8 @@ func (me *Server) Serve() (err error) {
 				panic(fmt.Sprint("unexpected addr type:", addr))
 			}()
 			extraHdrs := [][2]string{
-				{"Cache-Control", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2/time.Second)},
-				{"Location", me.Location(ip)},
+				{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2/time.Second)},
+				{"LOCATION", me.Location(ip)},
 			}
 			me.notifyAll(aliveNTS, extraHdrs)
 		}

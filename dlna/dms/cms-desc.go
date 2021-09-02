@@ -1,6 +1,6 @@
 package dms
 
-const connectionManagerServiceDesc = `<?xml version="1.0"?>
+const connectionManagerServiceDescription = `<?xml version="1.0"?>
 <scpd xmlns="urn:schemas-upnp-org:service-1-0">
 	<specVersion>
 		<major>1</major>

@@ -87,12 +87,15 @@ type Device struct {
 	Manufacturer string `xml:"manufacturer"`
 	ModelName    string `xml:"modelName"`
 	UDN          string
+	VendorXML    string `xml:",innerxml"`
 	IconList     []Icon    `xml:"iconList>icon"`
 	ServiceList  []Service `xml:"serviceList>service"`
 }
 
 type DeviceDesc struct {
 	XMLName     xml.Name    `xml:"urn:schemas-upnp-org:device-1-0 root"`
+	NSDLNA      string      `xml:"xmlns:dlna,attr"`
+	NSSEC       string      `xml:"xmlns:sec,attr"`
 	SpecVersion SpecVersion `xml:"specVersion"`
 	Device      Device      `xml:"device"`
 }
