@@ -90,6 +90,7 @@ type Device struct {
 	VendorXML    string `xml:",innerxml"`
 	IconList     []Icon    `xml:"iconList>icon"`
 	ServiceList  []Service `xml:"serviceList>service"`
+	PresentationURL	string `xml:"presentationURL,omitempty"`
 }
 
 type DeviceDesc struct {
