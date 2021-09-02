@@ -33,7 +33,7 @@ import (
 const (
 	serverField                 = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
 	rootDeviceType              = "urn:schemas-upnp-org:device:MediaServer:1"
-	rootDeviceModelName         = "dms 1.0"
+	rootDeviceModelName         = "DMS 1.0"
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
@@ -602,7 +602,10 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	// cmd.Stderr = os.Stderr
 	body, err := cmd.Output()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// serve 1st Icon if no ffmpegthumbnailer
+		w.Header().Set("Content-Type", me.Icons[0].Mimetype)
+		http.ServeContent(w, r, "", time.Time{}, me.Icons[0].ReadSeeker)
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
@@ -876,12 +879,12 @@ func (srv *Server) Init() (err error) {
 				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
 				ModelName:    rootDeviceModelName,
 				UDN:          srv.rootDeviceUUID,
-				VendorXML: `    <dlna:X_DLNACAP/>
-    <dlna:X_DLNADOC>DMS-1.50</dlna:X_DLNADOC>
-    <dlna:X_DLNADOC>M-DMS-1.50</dlna:X_DLNADOC>
-    <sec:ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:ProductCap>
-    <sec:X_ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:X_ProductCap>
-`,
+				VendorXML: `
+     <dlna:X_DLNACAP/>
+     <dlna:X_DLNADOC>DMS-1.50</dlna:X_DLNADOC>
+     <dlna:X_DLNADOC>M-DMS-1.50</dlna:X_DLNADOC>
+     <sec:ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:ProductCap>
+     <sec:X_ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:X_ProductCap>`,
 				ServiceList: func() (ss []upnp.Service) {
 					for _, s := range services {
 						ss = append(ss, s.Service)
