@@ -32,7 +32,7 @@ func BinaryInt(b bool) uint {
 // "DLNA.ORG_OP=" time-seek-range-supp bytes-range-header-supp
 func (cf ContentFeatures) String() (ret string) {
 	//DLNA.ORG_PN=[a-zA-Z0-9_]*
-	params := make([]string, 0, 2)
+	params := make([]string, 0, 3)
 	if cf.ProfileName != "" {
 		params = append(params, "DLNA.ORG_PN="+cf.ProfileName)
 	}
@@ -41,6 +41,7 @@ func (cf ContentFeatures) String() (ret string) {
 		BinaryInt(cf.SupportTimeSeek),
 		BinaryInt(cf.SupportRange),
 		BinaryInt(cf.Transcoded)))
+	params = append(params, "DLNA.ORG_FLAGS=01700000000000000000000000000000")
 	return strings.Join(params, ";")
 }
 
