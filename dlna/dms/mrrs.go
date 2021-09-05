@@ -18,10 +18,10 @@ func (mrrs *mediaReceiverRegistrarService) Handle(action string, argsXML []byte,
 			"Result": "1",
 		}, nil
 	case "RegisterDevice":
-//		return map[string]string{
-//			"RegistrationRespMsg": mrrs.rootDeviceUUID,
-//		}, nil
-		return nil, nil
+		return map[string]string{
+			"RegistrationRespMsg": mrrs.rootDeviceUUID,
+		}, nil
+//		return nil, nil
 	default:
 		return nil, upnp.InvalidActionError
 	}
