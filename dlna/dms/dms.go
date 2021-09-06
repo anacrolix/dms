@@ -496,7 +496,8 @@ func (me *mitmRespWriter) CloseNotify() <-chan bool {
 // Set the SCPD serve paths.
 func init() {
 	for _, s := range services {
-		p := path.Join("/scpd", s.ServiceId)
+		lastInd := strings.LastIndex(s.ServiceId, ":")
+		p := path.Join("/scpd", s.ServiceId[lastInd+1:])
 		s.SCPDURL = p + ".xml"
 	}
 }
