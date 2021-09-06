@@ -497,7 +497,7 @@ func (me *mitmRespWriter) CloseNotify() <-chan bool {
 func init() {
 	for _, s := range services {
 		p := path.Join("/scpd", s.ServiceId)
-		s.SCPDURL = p
+		s.SCPDURL = p + ".xml"
 	}
 }
 
@@ -507,7 +507,7 @@ func handleSCPDs(mux *http.ServeMux) {
 		mux.HandleFunc(s.SCPDURL, func(serviceDesc string) http.HandlerFunc {
 			return func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", `text/xml; charset="utf-8"`)
-				http.ServeContent(w, r, ".xml", startTime, bytes.NewReader([]byte(serviceDesc)))
+				http.ServeContent(w, r, "", startTime, bytes.NewReader([]byte(serviceDesc)))
 			}
 		}(s.SCPD))
 	}

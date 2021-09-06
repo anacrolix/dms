@@ -304,9 +304,9 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 		return map[string]string{
 			"FeatureList": `<Features xmlns="urn:schemas-upnp-org:av:avs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:schemas-upnp-org:av:avs http://www.upnp.org/schemas/av/avs.xsd">
 	<Feature name="samsung.com_BASICVIEW" version="1">
-		<container id="0" type="object.item.imageItem"/>
-		<container id="0" type="object.item.audioItem"/>
-		<container id="0" type="object.item.videoItem"/>
+		<container id="1" type="object.item.imageItem"/>
+		<container id="2" type="object.item.audioItem"/>
+		<container id="3" type="object.item.videoItem"/>
 	</Feature>
 </Features>`}, nil
 	case "X_SetBookmark":

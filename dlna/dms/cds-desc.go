@@ -347,7 +347,7 @@ const contentDirectoryServiceDescription = `<?xml version="1.0"?>
 				</argument>
 			</argumentList>
 		</action>
-	<action>
+		<action>
 			<name>X_GetFeatureList</name>
 			<argumentList>
 				<argument>
@@ -382,8 +382,7 @@ const contentDirectoryServiceDescription = `<?xml version="1.0"?>
 				</argument>
 			</argumentList>
 		</action>
-	
-</actionList>
+	</actionList>
 	<serviceStateTable>
 		<stateVariable sendEvents="no">
 			<name>SearchCapabilities</name>
@@ -483,7 +482,7 @@ const contentDirectoryServiceDescription = `<?xml version="1.0"?>
 			<name>A_ARG_TYPE_URI</name>
 			<dataType>uri</dataType>
 		</stateVariable>
-	<stateVariable sendEvents="no">
+		<stateVariable sendEvents="no">
 			<name>A_ARG_TYPE_CategoryType</name>
 			<dataType>ui4</dataType>
 			<defaultValue />
@@ -503,6 +502,5 @@ const contentDirectoryServiceDescription = `<?xml version="1.0"?>
 			<dataType>string</dataType>
 			<defaultValue />
 		</stateVariable>
-	
 </serviceStateTable>
 </scpd>`
