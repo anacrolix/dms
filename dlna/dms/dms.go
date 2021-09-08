@@ -33,7 +33,7 @@ import (
 const (
 	serverField                 = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
 	rootDeviceType              = "urn:schemas-upnp-org:device:MediaServer:1"
-	rootDeviceModelName         = "DMS 1.0"
+	rootDeviceModelName         = "dms 1.0"
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
@@ -228,8 +228,6 @@ type Server struct {
 	Interfaces             []net.Interface
 	httpServeMux           *http.ServeMux
 	RootObjectPath         string
-	OnBrowseDirectChildren func(path string, rootObjectPath string, host, userAgent string) (ret []interface{}, err error)
-	OnBrowseMetadata       func(path string, rootObjectPath string, host, userAgent string) (ret interface{}, err error)
 	rootDescXML            []byte
 	rootDeviceUUID         string
 	FFProbeCache           Cache
@@ -723,25 +721,20 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 	}
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-  if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-  }
-	host, _, err := net.SplitHostPort(r.Host)
-	newp := "8090" // Default TorrServe port 
-	if err == nil {
-		w.Header().Set("Connection", "close")  
-		u := r.URL  
-		u.Host = host + ":" + newp
-		u.Scheme = "http"  
-		http.Redirect(w, r, u.String(), http.StatusFound)
-	}
-}
-
 func (server *Server) initMux(mux *http.ServeMux) {
-	// Handle root (presentationURL)
-	mux.HandleFunc("/", indexHandler)
+	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
+		resp.Header().Set("content-type", "text/html")
+		err := rootTmpl.Execute(resp, struct {
+			Readonly bool
+			Path     string
+		}{
+			true,
+			server.RootObjectPath,
+		})
+		if err != nil {
+			log.Println(err)
+		}
+	})
 	mux.HandleFunc(contentDirectoryEventSubURL, server.contentDirectoryEventSubHandler)
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
