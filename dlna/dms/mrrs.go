@@ -11,15 +11,15 @@ type mediaReceiverRegistrarService struct {
 	upnp.Eventing
 }
 
-func (mrrs *mediaReceiverRegistrarService) Handle(action string, argsXML []byte, r *http.Request) (map[string]string, error) {
+func (mrrs *mediaReceiverRegistrarService) Handle(action string, argsXML []byte, r *http.Request) ([][2]string, error) {
 	switch action {
 	case "IsAuthorized", "IsValidated":
-		return map[string]string{
-			"Result": "1",
+		return [][2]string{
+			{"Result", "1"},
 		}, nil
 	case "RegisterDevice":
-		return map[string]string{
-			"RegistrationRespMsg": mrrs.rootDeviceUUID,
+		return [][2]string{
+			{"RegistrationRespMsg", mrrs.rootDeviceUUID},
 		}, nil
 //		return nil, nil
 	default:

@@ -13,27 +13,27 @@ type connectionManagerService struct {
 	upnp.Eventing
 }
 
-func (cms *connectionManagerService) Handle(action string, argsXML []byte, r *http.Request) (map[string]string, error) {
+func (cms *connectionManagerService) Handle(action string, argsXML []byte, r *http.Request) ([][2]string, error) {
 	switch action {
 	case ".GetCurrentConnectionInfo":
-		return map[string]string{
-			"ConnectionID": "0",
-			"RcsID": "-1",
-			"AVTransportID": "-1",
-			"ProtocolInfo": "",
-			"PeerConnectionManager": "",
-			"PeerConnectionID": "-1",
-			"Direction": "Output",
-			"Status": "OK",
+		return [][2]string{
+			{"ConnectionID", "0"},
+			{"RcsID", "-1"},
+			{"AVTransportID", "-1"},
+			{"ProtocolInfo", ""},
+			{"PeerConnectionManager", ""},
+			{"PeerConnectionID", "-1"},
+			{"Direction", "Output"},
+			{"Status", "OK"},
 		}, nil
 	case "GetCurrentConnectionIDs":
-		return map[string]string{
-			"ConnectionIDs": "",
+		return [][2]string{
+			{"ConnectionIDs", ""},
 		}, nil
 	case "GetProtocolInfo":
-		return map[string]string{
-			"Source": defaultProtocolInfo,
-			"Sink":   "",
+		return [][2]string{
+			{"Source", defaultProtocolInfo},
+			{"Sink",   ""},
 		}, nil
 	default:
 		return nil, upnp.InvalidActionError
