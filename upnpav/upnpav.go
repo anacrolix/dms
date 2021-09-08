@@ -41,9 +41,9 @@ type Object struct {
 	ID          string `xml:"id,attr"`
 	ParentID    string `xml:"parentID,attr"`
 	Restricted  int    `xml:"restricted,attr"` // indicates whether the object is modifiable
+	Title       string `xml:"dc:title"`
 	Class       string `xml:"upnp:class"`
 	Icon        string `xml:"upnp:icon,omitempty"`
-	Title       string `xml:"dc:title"`
 	Date        Timestamp `xml:"dc:date"`
 	Artist      string `xml:"upnp:artist,omitempty"`
 	Album       string `xml:"upnp:album,omitempty"`

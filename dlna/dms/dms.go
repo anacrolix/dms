@@ -260,7 +260,7 @@ type Server struct {
 
 // UPnP SOAP service.
 type UPnPService interface {
-	Handle(action string, argsXML []byte, r *http.Request) (respArgs map[string]string, err error)
+	Handle(action string, argsXML []byte, r *http.Request) (respArgs [][2]string, err error)
 	Subscribe(callback []*url.URL, timeoutSeconds int) (sid string, actualTimeout int, err error)
 	Unsubscribe(sid string) error
 }
@@ -515,9 +515,10 @@ func handleSCPDs(mux *http.ServeMux) {
 }
 
 // Marshal SOAP response arguments into a response XML snippet.
-func marshalSOAPResponse(sa upnp.SoapAction, args map[string]string) []byte {
+func marshalSOAPResponse(sa upnp.SoapAction, args [][2]string) []byte {
 	soapArgs := make([]soap.Arg, 0, len(args))
-	for argName, value := range args {
+	for  _, arg := range args {
+		argName, value := arg[0], arg[1]
 		soapArgs = append(soapArgs, soap.Arg{
 			XMLName: xml.Name{Local: argName},
 			Value:   value,
@@ -527,7 +528,7 @@ func marshalSOAPResponse(sa upnp.SoapAction, args map[string]string) []byte {
 }
 
 // Handle a SOAP request and return the response arguments or UPnP error.
-func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte, r *http.Request) (map[string]string, error) {
+func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte, r *http.Request) ([][2]string, error) {
 	service, ok := me.services[sa.Type]
 	if !ok {
 		// TODO: What's the invalid service error?!
@@ -741,19 +742,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 func (server *Server) initMux(mux *http.ServeMux) {
 	// Handle root (presentationURL)
 	mux.HandleFunc("/", indexHandler)
-//	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-//		resp.Header().Set("content-type", "text/html")
-//		err := rootTmpl.Execute(resp, struct {
-//			Readonly bool
-//			Path     string
-//		}{
-//			true,
-//			server.RootObjectPath,
-//		})
-//		if err != nil {
-//			log.Println(err)
-//		}
-//	})
 	mux.HandleFunc(contentDirectoryEventSubURL, server.contentDirectoryEventSubHandler)
 	mux.HandleFunc(iconPath, server.serveIcon)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
