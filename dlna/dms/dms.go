@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/anacrolix/dms/dlna"
@@ -782,11 +783,19 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	handleSCPDs(mux)
 	mux.HandleFunc(serviceControlURL, server.serviceControlHandler)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	for i, di := range server.Icons {
-		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i), func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", di.Mimetype)
-			http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
-		})
+	// DeviceIcons
+	iconHandl := func(w http.ResponseWriter, r *http.Request) {
+    idStr := path.Base(r.URL.Path)
+		id, _ := strconv.Atoi(idStr)
+    if id < 0 || id >= len(server.Icons) {
+			id=0
+		}
+		di := server.Icons[id]
+		w.Header().Set("Content-Type", di.Mimetype)
+		http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
+	}
+	for i, _ := range server.Icons {
+		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i),iconHandl)
 	}
 }
 
