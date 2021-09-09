@@ -229,59 +229,59 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 			return nil, upnp.Errorf(upnpav.NoSuchObjectErrorCode, err.Error())
 		}
 		switch browse.BrowseFlag {
-			case "BrowseDirectChildren":
-				objs, err := me.readContainer(obj, host, userAgent)
-				if err != nil {
-					return nil, upnp.Errorf(upnpav.NoSuchObjectErrorCode, err.Error())
+		case "BrowseDirectChildren":
+			objs, err := me.readContainer(obj, host, userAgent)
+			if err != nil {
+				return nil, upnp.Errorf(upnpav.NoSuchObjectErrorCode, err.Error())
+			}
+			totalMatches := len(objs)
+			objs = objs[func() (low int) {
+				low = browse.StartingIndex
+				if low > len(objs) {
+					low = len(objs)
 				}
-				totalMatches := len(objs)
-				objs = objs[func() (low int) {
-					low = browse.StartingIndex
-					if low > len(objs) {
-						low = len(objs)
+				return
+			}():]
+			if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
+				objs = objs[:browse.RequestedCount]
+			}
+			result, err := xml.Marshal(objs)
+			if err != nil {
+				return nil, err
+			}
+			return [][2]string{
+				{"Result", didl_lite(string(result))},
+				{"NumberReturned", fmt.Sprint(len(objs))},
+				{"TotalMatches", fmt.Sprint(totalMatches)},
+				{"UpdateID", me.updateIDString()},
+			}, nil
+		case "BrowseMetadata":
+			fileInfo, err := os.Stat(obj.FilePath())
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil, &upnp.Error{
+						Code: upnpav.NoSuchObjectErrorCode,
+						Desc: err.Error(),
 					}
-					return
-				}():]
-				if browse.RequestedCount != 0 && int(browse.RequestedCount) < len(objs) {
-					objs = objs[:browse.RequestedCount]
 				}
-				result, err := xml.Marshal(objs)
-				if err != nil {
-					return nil, err
-				}
-				return [][2]string{
-					{"Result",         didl_lite(string(result))},
-					{"NumberReturned", fmt.Sprint(len(objs))},
-					{"TotalMatches",   fmt.Sprint(totalMatches)},
-					{"UpdateID",       me.updateIDString()},
-				}, nil
-			case "BrowseMetadata":
-				fileInfo, err := os.Stat(obj.FilePath())
-				if err != nil {
-					if os.IsNotExist(err) {
-						return nil, &upnp.Error{
-							Code: upnpav.NoSuchObjectErrorCode,
-							Desc: err.Error(),
-						}
-					}
-					return nil, err
-				}
-				upnp, err := me.cdsObjectToUpnpavObject(obj, fileInfo, host, userAgent)
-				if err != nil {
-					return nil, err
-				}
-				buf, err := xml.Marshal(upnp)
-				if err != nil {
-					return nil, err
-				}
-				return [][2]string{
-					{"Result",         didl_lite(func() string { return string(buf) }())},
-					{"NumberReturned", "1"},
-					{"TotalMatches",   "1"},
-					{"UpdateID",       me.updateIDString()},
-				}, nil
-			default:
-				return nil, upnp.Errorf(upnp.ArgumentValueInvalidErrorCode, "unhandled browse flag: %v", browse.BrowseFlag)
+				return nil, err
+			}
+			upnp, err := me.cdsObjectToUpnpavObject(obj, fileInfo, host, userAgent)
+			if err != nil {
+				return nil, err
+			}
+			buf, err := xml.Marshal(upnp)
+			if err != nil {
+				return nil, err
+			}
+			return [][2]string{
+				{"Result", didl_lite(func() string { return string(buf) }())},
+				{"NumberReturned", "1"},
+				{"TotalMatches", "1"},
+				{"UpdateID", me.updateIDString()},
+			}, nil
+		default:
+			return nil, upnp.Errorf(upnp.ArgumentValueInvalidErrorCode, "unhandled browse flag: %v", browse.BrowseFlag)
 		}
 	case "GetSearchCapabilities":
 		return [][2]string{

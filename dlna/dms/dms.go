@@ -18,8 +18,8 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/anacrolix/dms/dlna"
@@ -86,18 +86,18 @@ var services = []*service{
 		SCPD: contentDirectoryServiceDescription,
 	},
 	{
-	 	Service: upnp.Service{
-	 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
-	 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-	 	},
-	 	SCPD: connectionManagerServiceDescription,
+		Service: upnp.Service{
+			ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
+			ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+		},
+		SCPD: connectionManagerServiceDescription,
 	},
 	{
-	 	Service: upnp.Service{
-	 		ServiceType: "urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1",
-	 		ServiceId:   "urn:microsoft.com:serviceId:X_MS_MediaReceiverRegistrar",
-	 	},
-	 	SCPD: mediaReceiverRegistrarDescription,
+		Service: upnp.Service{
+			ServiceType: "urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1",
+			ServiceId:   "urn:microsoft.com:serviceId:X_MS_MediaReceiverRegistrar",
+		},
+		SCPD: mediaReceiverRegistrarDescription,
 	},
 }
 
@@ -224,16 +224,16 @@ type Icon struct {
 }
 
 type Server struct {
-	HTTPConn               net.Listener
-	FriendlyName           string
-	Interfaces             []net.Interface
-	httpServeMux           *http.ServeMux
-	RootObjectPath         string
-	rootDescXML            []byte
-	rootDeviceUUID         string
-	FFProbeCache           Cache
-	closed                 chan struct{}
-	ssdpStopped            chan struct{}
+	HTTPConn       net.Listener
+	FriendlyName   string
+	Interfaces     []net.Interface
+	httpServeMux   *http.ServeMux
+	RootObjectPath string
+	rootDescXML    []byte
+	rootDeviceUUID string
+	FFProbeCache   Cache
+	closed         chan struct{}
+	ssdpStopped    chan struct{}
 	// The service SOAP handler keyed by service URN.
 	services   map[string]UPnPService
 	LogHeaders bool
@@ -516,7 +516,7 @@ func handleSCPDs(mux *http.ServeMux) {
 // Marshal SOAP response arguments into a response XML snippet.
 func marshalSOAPResponse(sa upnp.SoapAction, args [][2]string) []byte {
 	soapArgs := make([]soap.Arg, 0, len(args))
-	for  _, arg := range args {
+	for _, arg := range args {
 		argName, value := arg[0], arg[1]
 		soapArgs = append(soapArgs, soap.Arg{
 			XMLName: xml.Name{Local: argName},
@@ -785,17 +785,17 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	// DeviceIcons
 	iconHandl := func(w http.ResponseWriter, r *http.Request) {
-    idStr := path.Base(r.URL.Path)
+		idStr := path.Base(r.URL.Path)
 		id, _ := strconv.Atoi(idStr)
-    if id < 0 || id >= len(server.Icons) {
-			id=0
+		if id < 0 || id >= len(server.Icons) {
+			id = 0
 		}
 		di := server.Icons[id]
 		w.Header().Set("Content-Type", di.Mimetype)
 		http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
 	}
 	for i, _ := range server.Icons {
-		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i),iconHandl)
+		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i), iconHandl)
 	}
 }
 
@@ -861,8 +861,8 @@ func (srv *Server) Init() (err error) {
 	srv.rootDeviceUUID = makeDeviceUuid(srv.FriendlyName)
 	srv.rootDescXML, err = xml.MarshalIndent(
 		upnp.DeviceDesc{
-			NSDLNA: "urn:schemas-dlna-org:device-1-0",
-			NSSEC: "http://www.sec.co.kr/dlna",
+			NSDLNA:      "urn:schemas-dlna-org:device-1-0",
+			NSSEC:       "http://www.sec.co.kr/dlna",
 			SpecVersion: upnp.SpecVersion{Major: 1, Minor: 0},
 			Device: upnp.Device{
 				DeviceType:   rootDeviceType,

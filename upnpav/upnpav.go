@@ -31,25 +31,25 @@ type Container struct {
 // Item description
 type Item struct {
 	Object
-	XMLName xml.Name `xml:"item"`
-	Res     []Resource
+	XMLName  xml.Name `xml:"item"`
+	Res      []Resource
 	InnerXML string `xml:",innerxml"`
 }
 
 // Object description
 type Object struct {
-	ID          string `xml:"id,attr"`
-	ParentID    string `xml:"parentID,attr"`
-	Restricted  int    `xml:"restricted,attr"` // indicates whether the object is modifiable
-	Title       string `xml:"dc:title"`
-	Class       string `xml:"upnp:class"`
-	Icon        string `xml:"upnp:icon,omitempty"`
+	ID          string    `xml:"id,attr"`
+	ParentID    string    `xml:"parentID,attr"`
+	Restricted  int       `xml:"restricted,attr"` // indicates whether the object is modifiable
+	Title       string    `xml:"dc:title"`
+	Class       string    `xml:"upnp:class"`
+	Icon        string    `xml:"upnp:icon,omitempty"`
 	Date        Timestamp `xml:"dc:date"`
-	Artist      string `xml:"upnp:artist,omitempty"`
-	Album       string `xml:"upnp:album,omitempty"`
-	Genre       string `xml:"upnp:genre,omitempty"`
-	AlbumArtURI string `xml:"upnp:albumArtURI,omitempty"`
-	Searchable  int    `xml:"searchable,attr"`
+	Artist      string    `xml:"upnp:artist,omitempty"`
+	Album       string    `xml:"upnp:album,omitempty"`
+	Genre       string    `xml:"upnp:genre,omitempty"`
+	AlbumArtURI string    `xml:"upnp:albumArtURI,omitempty"`
+	Searchable  int       `xml:"searchable,attr"`
 }
 
 // Timestamp wraps time.Time for formatting purposes

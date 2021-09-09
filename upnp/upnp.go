@@ -82,15 +82,15 @@ type Service struct {
 }
 
 type Device struct {
-	DeviceType   string `xml:"deviceType"`
-	FriendlyName string `xml:"friendlyName"`
-	Manufacturer string `xml:"manufacturer"`
-	ModelName    string `xml:"modelName"`
-	UDN          string
-	VendorXML    string `xml:",innerxml"`
-	IconList     []Icon    `xml:"iconList>icon"`
-	ServiceList  []Service `xml:"serviceList>service"`
-	PresentationURL	string `xml:"presentationURL,omitempty"`
+	DeviceType      string `xml:"deviceType"`
+	FriendlyName    string `xml:"friendlyName"`
+	Manufacturer    string `xml:"manufacturer"`
+	ModelName       string `xml:"modelName"`
+	UDN             string
+	VendorXML       string    `xml:",innerxml"`
+	IconList        []Icon    `xml:"iconList>icon"`
+	ServiceList     []Service `xml:"serviceList>service"`
+	PresentationURL string    `xml:"presentationURL,omitempty"`
 }
 
 type DeviceDesc struct {
