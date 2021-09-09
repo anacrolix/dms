@@ -250,10 +250,10 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				return nil, err
 			}
 			return [][2]string{
-				{"Result",         didl_lite(string(result))},
+				{"Result", didl_lite(string(result))},
 				{"NumberReturned", fmt.Sprint(len(objs))},
-				{"TotalMatches",   fmt.Sprint(totalMatches)},
-				{"UpdateID",       me.updateIDString()},
+				{"TotalMatches", fmt.Sprint(totalMatches)},
+				{"UpdateID", me.updateIDString()},
 			}, nil
 		case "BrowseMetadata":
 			fileInfo, err := os.Stat(obj.FilePath())
@@ -275,10 +275,10 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				return nil, err
 			}
 			return [][2]string{
-				{"Result",         didl_lite(func() string { return string(buf) }())},
+				{"Result", didl_lite(func() string { return string(buf) }())},
 				{"NumberReturned", "1"},
-				{"TotalMatches",   "1"},
-				{"UpdateID",       me.updateIDString()},
+				{"TotalMatches", "1"},
+				{"UpdateID", me.updateIDString()},
 			}, nil
 		default:
 			return nil, upnp.Errorf(upnp.ArgumentValueInvalidErrorCode, "unhandled browse flag: %v", browse.BrowseFlag)

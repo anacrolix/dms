@@ -508,7 +508,7 @@ func handleSCPDs(mux *http.ServeMux) {
 // Marshal SOAP response arguments into a response XML snippet.
 func marshalSOAPResponse(sa upnp.SoapAction, args [][2]string) []byte {
 	soapArgs := make([]soap.Arg, 0, len(args))
-	for  _, arg := range args {
+	for _, arg := range args {
 		argName, value := arg[0], arg[1]
 		soapArgs = append(soapArgs, soap.Arg{
 			XMLName: xml.Name{Local: argName},
