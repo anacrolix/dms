@@ -114,7 +114,8 @@ func VP8Transcode(path string, start, length time.Duration, stderr io.Writer) (r
 		// "-deadline", "good",
 		// "-c:v", "libvpx", "-crf", "10",
 		"-f", "webm",
-		"pipe:"}...)
+		"pipe:",
+	}...)
 	return transcodePipe(args, stderr)
 }
 
@@ -134,7 +135,8 @@ func ChromecastTranscode(path string, start, length time.Duration, stderr io.Wri
 	}
 	args = append(args, []string{
 		"-f", "mp4",
-		"pipe:"}...)
+		"pipe:",
+	}...)
 	return transcodePipe(args, stderr)
 }
 
@@ -157,6 +159,7 @@ func WebTranscode(path string, start, length time.Duration, stderr io.Writer) (r
 	}
 	args = append(args, []string{
 		"-f", "mp4",
-		"pipe:"}...)
+		"pipe:",
+	}...)
 	return transcodePipe(args, stderr)
 }

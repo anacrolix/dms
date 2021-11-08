@@ -9,7 +9,7 @@ import (
 func TestMarshalPropertySet(t *testing.T) {
 	b, err := xml.MarshalIndent(&PropertySet{
 		Properties: []Property{
-			Property{
+			{
 				Variable: Variable{
 					XMLName: xml.Name{
 						Local: "SystemUpdateID",
@@ -17,7 +17,7 @@ func TestMarshalPropertySet(t *testing.T) {
 					Value: "0",
 				},
 			},
-			Property{
+			{
 				Variable: Variable{
 					XMLName: xml.Name{
 						Local: "answerToTheUniverse",

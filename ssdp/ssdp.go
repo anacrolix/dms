@@ -24,9 +24,7 @@ const (
 	byebyeNTS  = "ssdp:byebye"
 )
 
-var (
-	NetAddr *net.UDPAddr
-)
+var NetAddr *net.UDPAddr
 
 func init() {
 	var err error

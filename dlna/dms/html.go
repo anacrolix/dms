@@ -4,9 +4,7 @@ import (
 	"html/template"
 )
 
-var (
-	rootTmpl *template.Template
-)
+var rootTmpl *template.Template
 
 func init() {
 	rootTmpl = template.Must(template.New("root").Parse(

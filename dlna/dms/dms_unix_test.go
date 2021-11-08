@@ -6,7 +6,7 @@ package dms
 import "testing"
 
 func TestIsHiddenPath(t *testing.T) {
-	var data = map[string]bool{
+	data := map[string]bool{
 		"/some/path":         false,
 		"/some/foo.bar":      false,
 		"/some/path/.hidden": true,
