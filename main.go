@@ -60,7 +60,7 @@ func (config *dmsConfig) load(configPath string) {
 	}
 }
 
-//default config
+// default config
 var config = &dmsConfig{
 	Path:             "",
 	IfName:           "",
@@ -198,14 +198,14 @@ func main() {
 		ForceTranscodeTo: config.ForceTranscodeTo,
 		NoProbe:          config.NoProbe,
 		Icons: []dms.Icon{
-			dms.Icon{
+			{
 				Width:      48,
 				Height:     48,
 				Depth:      8,
 				Mimetype:   "image/png",
 				ReadSeeker: readIcon(config.DeviceIcon, 48),
 			},
-			dms.Icon{
+			{
 				Width:      128,
 				Height:     128,
 				Depth:      8,

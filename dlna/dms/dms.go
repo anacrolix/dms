@@ -120,6 +120,7 @@ func serviceTypes() (ret []string) {
 	}
 	return
 }
+
 func (me *Server) httpPort() int {
 	return me.HTTPConn.Addr().(*net.TCPAddr).Port
 }
@@ -213,9 +214,7 @@ func (me *Server) ssdpInterface(if_ net.Interface) {
 	}
 }
 
-var (
-	startTime time.Time
-)
+var startTime time.Time
 
 type Icon struct {
 	Width, Height, Depth int
@@ -565,8 +564,8 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	//AwoX/1.1 UPnP/1.0 DLNADOC/1.50
-	//log.Println(r.UserAgent())
+	// AwoX/1.1 UPnP/1.0 DLNADOC/1.50
+	// log.Println(r.UserAgent())
 	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 	w.Header().Set("Ext", "")
 	w.Header().Set("Server", serverField)
@@ -615,7 +614,7 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
 	body := xmlMarshalOrPanic(upnp.PropertySet{
 		Properties: []upnp.Property{
-			upnp.Property{
+			{
 				Variable: upnp.Variable{
 					XMLName: xml.Name{
 						Local: "SystemUpdateID",

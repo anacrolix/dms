@@ -31,7 +31,7 @@ func BinaryInt(b bool) uint {
 // flags are in hex. trailing 24 zeroes, 26 are after the space
 // "DLNA.ORG_OP=" time-seek-range-supp bytes-range-header-supp
 func (cf ContentFeatures) String() (ret string) {
-	//DLNA.ORG_PN=[a-zA-Z0-9_]*
+	// DLNA.ORG_PN=[a-zA-Z0-9_]*
 	params := make([]string, 0, 3)
 	if cf.ProfileName != "" {
 		params = append(params, "DLNA.ORG_PN="+cf.ProfileName)

@@ -52,18 +52,23 @@ type bindataFileInfo struct {
 func (fi bindataFileInfo) Name() string {
 	return fi.name
 }
+
 func (fi bindataFileInfo) Size() int64 {
 	return fi.size
 }
+
 func (fi bindataFileInfo) Mode() os.FileMode {
 	return fi.mode
 }
+
 func (fi bindataFileInfo) ModTime() time.Time {
 	return fi.modTime
 }
+
 func (fi bindataFileInfo) IsDir() bool {
 	return false
 }
+
 func (fi bindataFileInfo) Sys() interface{} {
 	return nil
 }
@@ -184,8 +189,8 @@ type bintree struct {
 }
 
 var _bintree = &bintree{nil, map[string]*bintree{
-	"data": &bintree{nil, map[string]*bintree{
-		"VGC Sonic.png": &bintree{dataVgcSonicPng, map[string]*bintree{}},
+	"data": {nil, map[string]*bintree{
+		"VGC Sonic.png": {dataVgcSonicPng, map[string]*bintree{}},
 	}},
 }}
 
