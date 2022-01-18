@@ -440,19 +440,22 @@ func init() {
 }
 
 func getDefaultFriendlyName() string {
-	return fmt.Sprintf("%s: %s on %s", rootDeviceModelName, func() string {
-		user, err := user.Current()
-		if err != nil {
-			log.Panicf("getDefaultFriendlyName could not get username: %s", err)
-		}
-		return user.Name
-	}(), func() string {
-		name, err := os.Hostname()
-		if err != nil {
-			log.Panicf("getDefaultFriendlyName could not get hostname: %s", err)
-		}
-		return name
-	}())
+	return fmt.Sprintf("%s: %s on %s",
+		rootDeviceModelName,
+		func() string {
+			user, err := user.Current()
+			if err != nil {
+				log.Panicf("getDefaultFriendlyName could not get username: %s", err)
+			}
+			return user.Name
+		}(),
+		func() string {
+			name, err := os.Hostname()
+			if err != nil {
+				log.Panicf("getDefaultFriendlyName could not get hostname: %s", err)
+			}
+			return name
+		}())
 }
 
 func xmlMarshalOrPanic(value interface{}) []byte {
