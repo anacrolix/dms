@@ -1,6 +1,6 @@
 module github.com/anacrolix/dms
 
-go 1.12
+go 1.16
 
 require (
 	github.com/anacrolix/ffprobe v1.0.0

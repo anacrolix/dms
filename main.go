@@ -1,7 +1,5 @@
 package main
 
-//go:generate go-bindata data/
-
 import (
 	"bytes"
 	"encoding/json"
@@ -22,10 +20,15 @@ import (
 	"syscall"
 	"time"
 
+	_ "embed"
+
 	"github.com/anacrolix/dms/dlna/dms"
 	"github.com/anacrolix/dms/rrcache"
 	"github.com/nfnt/resize"
 )
+
+//go:embed "data/VGC Sonic.png"
+var defaultIcon []byte
 
 type dmsConfig struct {
 	Path                string
@@ -115,7 +118,7 @@ func main() {
 	ifName := flag.String("ifname", config.IfName, "specific SSDP network interface")
 	http := flag.String("http", config.Http, "http server port")
 	friendlyName := flag.String("friendlyName", config.FriendlyName, "server friendly name")
-	deviceIcon := flag.String("deviceIcon", config.DeviceIcon, "device icon")
+	deviceIcon := flag.String("deviceIcon", config.DeviceIcon, "device defaultIcon")
 	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
@@ -292,7 +295,7 @@ func (cache *fFprobeCache) save(path string) error {
 
 func getIconReader(path string) (io.ReadCloser, error) {
 	if path == "" {
-		return ioutil.NopCloser(bytes.NewReader(MustAsset("data/VGC Sonic.png"))), nil
+		return ioutil.NopCloser(bytes.NewReader(defaultIcon)), nil
 	}
 	return os.Open(path)
 }
