@@ -28,13 +28,20 @@ import (
 	"github.com/anacrolix/dms/transcode"
 	"github.com/anacrolix/dms/upnp"
 	"github.com/anacrolix/dms/upnpav"
+	"github.com/anacrolix/dms/version"
 	"github.com/anacrolix/ffprobe"
 )
 
+var (
+	serverField = fmt.Sprintf(`Linux/3.4 DLNADOC/1.50 UPnP/1.0 %s/%s`,
+		userAgentProduct,
+		version.DmsVersion)
+	rootDeviceModelName = fmt.Sprintf("%s %s", userAgentProduct, version.DmsVersion)
+)
+
 const (
-	serverField                 = "Linux/3.4 DLNADOC/1.50 UPnP/1.0 DMS/1.0"
+	userAgentProduct            = "dms"
 	rootDeviceType              = "urn:schemas-upnp-org:device:MediaServer:1"
-	rootDeviceModelName         = "dms 1.0"
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
