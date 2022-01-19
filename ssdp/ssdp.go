@@ -98,9 +98,9 @@ func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
 	if err := p.SetMulticastTTL(2); err != nil {
 		log.Println(err)
 	}
-	if err := p.SetMulticastLoopback(true); err != nil {
-		log.Println(err)
-	}
+	// if err := p.SetMulticastLoopback(true); err != nil {
+	// 	log.Println(err)
+	// }
 	return
 }
 
