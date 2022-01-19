@@ -156,6 +156,11 @@ func (me *Server) Serve() (err error) {
 				}
 				panic(fmt.Sprint("unexpected addr type:", addr))
 			}()
+			if ip.IsLinkLocalUnicast() {
+				// These addresses seem to confuse VLC. Possibly there's supposed to be a zone
+				// included in the address, but I don't see one.
+				continue
+			}
 			extraHdrs := [][2]string{
 				{"CACHE-CONTROL", fmt.Sprintf("max-age=%d", 5*me.NotifyInterval/2/time.Second)},
 				{"LOCATION", me.Location(ip)},
