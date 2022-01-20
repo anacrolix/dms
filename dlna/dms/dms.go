@@ -407,7 +407,7 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 		u, _ := user.Current()
 		return filepath.Join(u.HomeDir, ".dms", "log", tsname, filepath.Base(path_))
 	}()
-	os.MkdirAll(filepath.Dir(stderrPath), 0750)
+	os.MkdirAll(filepath.Dir(stderrPath), 0o750)
 	logFile, err := os.Create(stderrPath)
 	if err != nil {
 		log.Printf("couldn't create transcode log file: %s", err)
@@ -615,7 +615,7 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 		// serve 1st Icon if no ffmpegthumbnailer
 		w.Header().Set("Content-Type", me.Icons[0].Mimetype)
 		http.ServeContent(w, r, "", time.Time{}, me.Icons[0].ReadSeeker)
-		//http.Error(w, err.Error(), http.StatusInternalServerError)
+		// http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
@@ -803,7 +803,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", di.Mimetype)
 		http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
 	}
-	for i, _ := range server.Icons {
+	for i := range server.Icons {
 		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i), iconHandl)
 	}
 }
