@@ -18,6 +18,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,7 +38,6 @@ const (
 	resPath                     = "/res"
 	iconPath                    = "/icon"
 	rootDescPath                = "/rootDesc.xml"
-	contentDirectorySCPDURL     = "/scpd/ContentDirectory.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	serviceControlURL           = "/ctl"
 	deviceIconPath              = "/deviceIcon"
@@ -85,13 +85,20 @@ var services = []*service{
 		},
 		SCPD: contentDirectoryServiceDescription,
 	},
-	// {
-	// 	Service: upnp.Service{
-	// 		ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:3",
-	// 		ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
-	// 	},
-	// 	SCPD: connectionManagerServiceDesc,
-	// },
+	{
+		Service: upnp.Service{
+			ServiceType: "urn:schemas-upnp-org:service:ConnectionManager:1",
+			ServiceId:   "urn:upnp-org:serviceId:ConnectionManager",
+		},
+		SCPD: connectionManagerServiceDescription,
+	},
+	{
+		Service: upnp.Service{
+			ServiceType: "urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1",
+			ServiceId:   "urn:microsoft.com:serviceId:X_MS_MediaReceiverRegistrar",
+		},
+		SCPD: mediaReceiverRegistrarDescription,
+	},
 }
 
 // The control URL for every service is the same. We're able to infer the desired service from the request headers.
@@ -487,8 +494,9 @@ func (me *mitmRespWriter) CloseNotify() <-chan bool {
 // Set the SCPD serve paths.
 func init() {
 	for _, s := range services {
-		p := path.Join("/scpd", s.ServiceId)
-		s.SCPDURL = p
+		lastInd := strings.LastIndex(s.ServiceId, ":")
+		p := path.Join("/scpd", s.ServiceId[lastInd+1:])
+		s.SCPDURL = p + ".xml"
 	}
 }
 
@@ -498,7 +506,7 @@ func handleSCPDs(mux *http.ServeMux) {
 		mux.HandleFunc(s.SCPDURL, func(serviceDesc string) http.HandlerFunc {
 			return func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", `text/xml; charset="utf-8"`)
-				http.ServeContent(w, r, ".xml", startTime, bytes.NewReader([]byte(serviceDesc)))
+				http.ServeContent(w, r, "", startTime, bytes.NewReader([]byte(serviceDesc)))
 			}
 		}(s.SCPD))
 	}
@@ -594,7 +602,10 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	// cmd.Stderr = os.Stderr
 	body, err := cmd.Output()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// serve 1st Icon if no ffmpegthumbnailer
+		w.Header().Set("Content-Type", me.Icons[0].Mimetype)
+		http.ServeContent(w, r, "", time.Time{}, me.Icons[0].ReadSeeker)
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
@@ -771,11 +782,19 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	handleSCPDs(mux)
 	mux.HandleFunc(serviceControlURL, server.serviceControlHandler)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	for i, di := range server.Icons {
-		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i), func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", di.Mimetype)
-			http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
-		})
+	// DeviceIcons
+	iconHandl := func(w http.ResponseWriter, r *http.Request) {
+		idStr := path.Base(r.URL.Path)
+		id, _ := strconv.Atoi(idStr)
+		if id < 0 || id >= len(server.Icons) {
+			id = 0
+		}
+		di := server.Icons[id]
+		w.Header().Set("Content-Type", di.Mimetype)
+		http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
+	}
+	for i, _ := range server.Icons {
+		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i), iconHandl)
 	}
 }
 
@@ -784,8 +803,22 @@ func (s *Server) initServices() (err error) {
 	if err != nil {
 		return
 	}
+	urn1, err := upnp.ParseServiceType(services[1].ServiceType)
+	if err != nil {
+		return
+	}
+	urn2, err := upnp.ParseServiceType(services[2].ServiceType)
+	if err != nil {
+		return
+	}
 	s.services = map[string]UPnPService{
 		urn.Type: &contentDirectoryService{
+			Server: s,
+		},
+		urn1.Type: &connectionManagerService{
+			Server: s,
+		},
+		urn2.Type: &mediaReceiverRegistrarService{
 			Server: s,
 		},
 	}
@@ -827,6 +860,8 @@ func (srv *Server) Init() (err error) {
 	srv.rootDeviceUUID = makeDeviceUuid(srv.FriendlyName)
 	srv.rootDescXML, err = xml.MarshalIndent(
 		upnp.DeviceDesc{
+			NSDLNA:      "urn:schemas-dlna-org:device-1-0",
+			NSSEC:       "http://www.sec.co.kr/dlna",
 			SpecVersion: upnp.SpecVersion{Major: 1, Minor: 0},
 			Device: upnp.Device{
 				DeviceType:   rootDeviceType,
@@ -834,6 +869,12 @@ func (srv *Server) Init() (err error) {
 				Manufacturer: "Matt Joiner <anacrolix@gmail.com>",
 				ModelName:    rootDeviceModelName,
 				UDN:          srv.rootDeviceUUID,
+				VendorXML: `
+     <dlna:X_DLNACAP/>
+     <dlna:X_DLNADOC>DMS-1.50</dlna:X_DLNADOC>
+     <dlna:X_DLNADOC>M-DMS-1.50</dlna:X_DLNADOC>
+     <sec:ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:ProductCap>
+     <sec:X_ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:X_ProductCap>`,
 				ServiceList: func() (ss []upnp.Service) {
 					for _, s := range services {
 						ss = append(ss, s.Service)
@@ -852,6 +893,7 @@ func (srv *Server) Init() (err error) {
 					}
 					return
 				}(),
+				PresentationURL: "/",
 			},
 		},
 		" ", "  ")

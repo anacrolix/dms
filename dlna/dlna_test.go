@@ -9,7 +9,7 @@ func TestContentFeaturesString(t *testing.T) {
 		Transcoded:      true,
 		SupportTimeSeek: true,
 	}.String()
-	e := "DLNA.ORG_OP=10;DLNA.ORG_CI=1"
+	e := "DLNA.ORG_OP=10;DLNA.ORG_CI=1;DLNA.ORG_FLAGS=01700000000000000000000000000000"
 	if e != a {
 		t.Fatal(a)
 	}

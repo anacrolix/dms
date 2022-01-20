@@ -287,6 +287,21 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 		return [][2]string{
 			{"SearchCaps", ""},
 		}, nil
+	// Samsung Extensions
+	case "X_GetFeatureList":
+	// TODO: make it dependable on model
+	// https://github.com/1100101/minidlna/blob/ca6dbba18390ad6f8b8d7b7dbcf797dbfd95e2db/upnpsoap.c#L2153-L2199
+		return [][2]string{
+			{"FeatureList", `<Features xmlns="urn:schemas-upnp-org:av:avs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:schemas-upnp-org:av:avs http://www.upnp.org/schemas/av/avs.xsd">
+	<Feature name="samsung.com_BASICVIEW" version="1">
+		<container id="0" type="object.item.audioItem"/> // "A"
+		<container id="0" type="object.item.videoItem"/> // "V"
+		<container id="0" type="object.item.imageItem"/> // "I"
+	</Feature>
+</Features>`}}, nil
+	case "X_SetBookmark":
+		// just ignore
+		return [][2]string{}, nil
 	default:
 		return nil, upnp.InvalidActionError
 	}
