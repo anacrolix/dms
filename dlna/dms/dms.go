@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/anacrolix/dms/dlna"
@@ -161,21 +162,16 @@ func (me *Server) serveHTTP() error {
 const ssdpInterfaceFlags = net.FlagUp | net.FlagMulticast
 
 func (me *Server) doSSDP() {
-	active := 0
-	stopped := make(chan struct{})
+	var wg sync.WaitGroup
 	for _, if_ := range me.Interfaces {
-		active++
-		go func(if_ net.Interface) {
-			defer func() {
-				stopped <- struct{}{}
-			}()
+		if_ := if_
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			me.ssdpInterface(if_)
-		}(if_)
+		}()
 	}
-	for active > 0 {
-		<-stopped
-		active--
-	}
+	wg.Wait()
 }
 
 // Run SSDP server on an interface.
