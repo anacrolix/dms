@@ -202,18 +202,18 @@ func main() {
 		NoProbe:          config.NoProbe,
 		Icons: []dms.Icon{
 			{
-				Width:      48,
-				Height:     48,
-				Depth:      8,
-				Mimetype:   "image/png",
-				ReadSeeker: readIcon(config.DeviceIcon, 48),
+				Width:    48,
+				Height:   48,
+				Depth:    8,
+				Mimetype: "image/png",
+				Bytes:    readIcon(config.DeviceIcon, 48),
 			},
 			{
-				Width:      128,
-				Height:     128,
-				Depth:      8,
-				Mimetype:   "image/png",
-				ReadSeeker: readIcon(config.DeviceIcon, 128),
+				Width:    128,
+				Height:   128,
+				Depth:    8,
+				Mimetype: "image/png",
+				Bytes:    readIcon(config.DeviceIcon, 128),
 			},
 		},
 		StallEventSubscribe: config.StallEventSubscribe,
@@ -300,7 +300,7 @@ func getIconReader(path string) (io.ReadCloser, error) {
 	return os.Open(path)
 }
 
-func readIcon(path string, size uint) *bytes.Reader {
+func readIcon(path string, size uint) []byte {
 	r, err := getIconReader(path)
 	if err != nil {
 		panic(err)
@@ -313,11 +313,11 @@ func readIcon(path string, size uint) *bytes.Reader {
 	return resizeImage(imageData, size)
 }
 
-func resizeImage(imageData image.Image, size uint) *bytes.Reader {
+func resizeImage(imageData image.Image, size uint) []byte {
 	img := resize.Resize(size, size, imageData, resize.Lanczos3)
 	var buff bytes.Buffer
 	png.Encode(&buff, img)
-	return bytes.NewReader(buff.Bytes())
+	return buff.Bytes()
 }
 
 func makeIpNets(s string) []*net.IPNet {

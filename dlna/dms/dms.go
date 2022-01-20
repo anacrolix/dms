@@ -222,7 +222,7 @@ var startTime time.Time
 type Icon struct {
 	Width, Height, Depth int
 	Mimetype             string
-	io.ReadSeeker
+	Bytes                []byte
 }
 
 type Server struct {
@@ -610,7 +610,7 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// serve 1st Icon if no ffmpegthumbnailer
 		w.Header().Set("Content-Type", me.Icons[0].Mimetype)
-		http.ServeContent(w, r, "", time.Time{}, me.Icons[0].ReadSeeker)
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(me.Icons[0].Bytes))
 		// http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -797,7 +797,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		}
 		di := server.Icons[id]
 		w.Header().Set("Content-Type", di.Mimetype)
-		http.ServeContent(w, r, "", time.Time{}, di.ReadSeeker)
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(di.Bytes))
 	}
 	for i := range server.Icons {
 		mux.HandleFunc(fmt.Sprintf("%s/%d", deviceIconPath, i), iconHandl)
