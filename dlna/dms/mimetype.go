@@ -1,12 +1,13 @@
 package dms
 
 import (
-	"log"
 	"mime"
 	"net/http"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/anacrolix/log"
 )
 
 func init() {

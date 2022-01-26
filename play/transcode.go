@@ -7,9 +7,10 @@ import (
 	"bufio"
 	"flag"
 	"io"
-	"log"
 	"os"
 	"time"
+
+	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/misc"
 )

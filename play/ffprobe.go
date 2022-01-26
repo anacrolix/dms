@@ -5,9 +5,9 @@ package main
 
 import (
 	"flag"
-	"log"
 
 	"github.com/anacrolix/ffprobe"
+	"github.com/anacrolix/log"
 )
 
 func main() {

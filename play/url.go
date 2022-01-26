@@ -5,8 +5,9 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/url"
+
+	"github.com/anacrolix/log"
 )
 
 func main() {

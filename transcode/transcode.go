@@ -4,11 +4,12 @@ package transcode
 
 import (
 	"io"
-	"log"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"time"
+
+	"github.com/anacrolix/log"
 
 	. "github.com/anacrolix/dms/misc"
 	"github.com/anacrolix/ffprobe"

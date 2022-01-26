@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -22,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/dlna"
 	"github.com/anacrolix/dms/soap"
@@ -176,6 +177,7 @@ func (me *Server) doSSDP() {
 
 // Run SSDP server on an interface.
 func (me *Server) ssdpInterface(if_ net.Interface) {
+	logger := me.Logger.WithNames("ssdp", if_.Name)
 	s := ssdp.Server{
 		Interface: if_,
 		Devices:   devices(),
@@ -198,16 +200,16 @@ func (me *Server) ssdpInterface(if_ net.Interface) {
 			// good.
 			return
 		}
-		log.Printf("error creating ssdp server on %s: %s", if_.Name, err)
+		logger.Printf("error creating ssdp server on %s: %s", if_.Name, err)
 		return
 	}
 	defer s.Close()
-	log.Println("started SSDP on", if_.Name)
+	logger.Levelf(log.Info, "started SSDP on %q", if_.Name)
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
 		if err := s.Serve(); err != nil {
-			log.Printf("%q: %q\n", if_.Name, err)
+			logger.Printf("%q: %q\n", if_.Name, err)
 		}
 	}()
 	select {
@@ -256,7 +258,9 @@ type Server struct {
 	// Ingnore unreadable files and directories
 	IgnoreUnreadable bool
 	// White list of clients
-	AllowedIpNets []*net.IPNet
+	AllowedIpNets  []*net.IPNet
+	Logger         log.Logger
+	eventingLogger log.Logger
 }
 
 // UPnP SOAP service.
@@ -646,7 +650,7 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		Space: "urn:schemas-upnp-org:event-1-0",
 	})
 	body = append([]byte(`<?xml version="1.0"?>`+"\n"), body...)
-	eventingLogger.Print(string(body))
+	server.eventingLogger.Print(string(body))
 	for _, _url := range urls {
 		bodyReader := bytes.NewReader(body)
 		req, err := http.NewRequest("NOTIFY", _url.String(), bodyReader)
@@ -661,22 +665,20 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		req.Header["SEQ"] = []string{"0"}
 		// req.Header["TRANSFER-ENCODING"] = []string{"chunked"}
 		// req.ContentLength = int64(bodyReader.Len())
-		eventingLogger.Print(req.Header)
-		eventingLogger.Print("starting notify")
+		server.eventingLogger.Print(req.Header)
+		server.eventingLogger.Print("starting notify")
 		resp, err := http.DefaultClient.Do(req)
-		eventingLogger.Print("finished notify")
+		server.eventingLogger.Print("finished notify")
 		if err != nil {
 			log.Printf("Could not notify %s: %s", _url.String(), err)
 			continue
 		}
-		eventingLogger.Print(resp)
+		server.eventingLogger.Print(resp)
 		b, _ := ioutil.ReadAll(resp.Body)
-		eventingLogger.Println(string(b))
+		server.eventingLogger.Println(string(b))
 		resp.Body.Close()
 	}
 }
-
-var eventingLogger = log.New(ioutil.Discard, "", 0)
 
 func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *http.Request) {
 	if server.StallEventSubscribe {
@@ -696,21 +698,21 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 		// TODO: Get eventing to work with the problematic TV.
 		t := time.Now()
 		<-w.(http.CloseNotifier).CloseNotify()
-		eventingLogger.Printf("stalled subscribe connection went away after %s", time.Since(t))
+		server.eventingLogger.Printf("stalled subscribe connection went away after %s", time.Since(t))
 		return
 	}
 	// The following code is a work in progress. It partially implements
 	// the spec on eventing but hasn't been completed as I have nothing to
 	// test it with.
-	eventingLogger.Print(r.Header)
+	server.eventingLogger.Print(r.Header)
 	service := server.services["ContentDirectory"]
-	eventingLogger.Println(r.RemoteAddr, r.Method, r.Header.Get("SID"))
+	server.eventingLogger.Println(r.RemoteAddr, r.Method, r.Header.Get("SID"))
 	if r.Method == "SUBSCRIBE" && r.Header.Get("SID") == "" {
 		urls := upnp.ParseCallbackURLs(r.Header.Get("CALLBACK"))
-		eventingLogger.Println(urls)
+		server.eventingLogger.Println(urls)
 		var timeout int
 		fmt.Sscanf(r.Header.Get("TIMEOUT"), "Second-%d", &timeout)
-		eventingLogger.Println(timeout, r.Header.Get("TIMEOUT"))
+		server.eventingLogger.Println(timeout, r.Header.Get("TIMEOUT"))
 		sid, timeout, _ := service.Subscribe(urls, timeout)
 		w.Header()["SID"] = []string{sid}
 		w.Header()["TIMEOUT"] = []string{fmt.Sprintf("Second-%d", timeout)}
@@ -723,7 +725,7 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 	} else if r.Method == "SUBSCRIBE" {
 		http.Error(w, "meh", http.StatusPreconditionFailed)
 	} else {
-		eventingLogger.Printf("unhandled event method: %s", r.Method)
+		server.eventingLogger.Printf("unhandled event method: %s", r.Method)
 	}
 }
 
@@ -832,6 +834,8 @@ func (s *Server) initServices() (err error) {
 }
 
 func (srv *Server) Init() (err error) {
+	srv.eventingLogger = srv.Logger.WithNames("eventing")
+	srv.eventingLogger.Levelf(log.Debug, "hello %v", "world")
 	if err = srv.initServices(); err != nil {
 		return
 	}
@@ -907,7 +911,7 @@ func (srv *Server) Init() (err error) {
 		return
 	}
 	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
-	log.Println("HTTP srv on", srv.HTTPConn.Addr())
+	srv.Logger.Println("HTTP srv on", srv.HTTPConn.Addr())
 	srv.initMux(srv.httpServeMux)
 	srv.ssdpStopped = make(chan struct{})
 	return nil

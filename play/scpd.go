@@ -6,9 +6,9 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"log"
 
 	"github.com/anacrolix/dms/upnp"
+	"github.com/anacrolix/log"
 )
 
 func main() {

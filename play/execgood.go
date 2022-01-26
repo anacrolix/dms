@@ -5,10 +5,11 @@ package main
 
 import (
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/anacrolix/log"
 )
 
 func main() {

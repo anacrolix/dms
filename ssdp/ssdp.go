@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/anacrolix/log"
 
 	"golang.org/x/net/ipv4"
 )
@@ -30,7 +31,7 @@ func init() {
 	var err error
 	NetAddr, err = net.ResolveUDPAddr("udp4", AddrString)
 	if err != nil {
-		log.Panicf("Could not resolve %s: %s", AddrString, err)
+		log.Printf("Could not resolve %s: %s", AddrString, err)
 	}
 }
 
@@ -87,6 +88,7 @@ type Server struct {
 	UUID           string
 	NotifyInterval time.Duration
 	closed         chan struct{}
+	Logger         log.Logger
 }
 
 func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
@@ -96,7 +98,7 @@ func makeConn(ifi net.Interface) (ret *net.UDPConn, err error) {
 	}
 	p := ipv4.NewPacketConn(ret)
 	if err := p.SetMulticastTTL(2); err != nil {
-		log.Println(err)
+		log.Print(err)
 	}
 	// if err := p.SetMulticastLoopback(true); err != nil {
 	// 	log.Println(err)
@@ -120,7 +122,7 @@ func (me *Server) serve() {
 		default:
 		}
 		if err != nil {
-			log.Printf("error reading from UDP socket: %s", err)
+			me.Logger.Printf("error reading from UDP socket: %s", err)
 			break
 		}
 		go me.handle(b[:n], addr)
@@ -203,9 +205,9 @@ func (me *Server) makeNotifyMessage(target, nts string, extraHdrs [][2]string) [
 
 func (me *Server) send(buf []byte, addr *net.UDPAddr) {
 	if n, err := me.conn.WriteToUDP(buf, addr); err != nil {
-		log.Printf("error writing to UDP socket: %s", err)
+		me.Logger.Printf("error writing to UDP socket: %s", err)
 	} else if n != len(buf) {
-		log.Printf("short write: %d/%d bytes", n, len(buf))
+		me.Logger.Printf("short write: %d/%d bytes", n, len(buf))
 	}
 }
 
@@ -221,7 +223,7 @@ func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr
 
 func (me *Server) log(args ...interface{}) {
 	args = append([]interface{}{me.Interface.Name + ":"}, args...)
-	log.Print(args...)
+	me.Logger.Print(args...)
 }
 
 func (me *Server) sendByeBye() {
@@ -253,7 +255,7 @@ func (me *Server) allTypes() (ret []string) {
 func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	req, err := ReadRequest(bufio.NewReader(bytes.NewReader(buf)))
 	if err != nil {
-		log.Println(err)
+		me.Logger.Println(err)
 		return
 	}
 	if req.Method != "M-SEARCH" || req.Header.Get("man") != `"ssdp:discover"` {
@@ -264,7 +266,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		mxHeader := req.Header.Get("mx")
 		i, err := strconv.ParseUint(mxHeader, 0, 0)
 		if err != nil {
-			log.Printf("Invalid mx header %q: %s", mxHeader, err)
+			me.Logger.Printf("Invalid mx header %q: %s", mxHeader, err)
 			return
 		}
 		mx = uint(i)

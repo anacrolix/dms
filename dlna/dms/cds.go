@@ -3,7 +3,6 @@ package dms
 import (
 	"encoding/xml"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/dlna"
 	"github.com/anacrolix/dms/misc"
@@ -51,7 +52,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		return
 	}
 	if !fileInfo.Mode().IsRegular() {
-		log.Printf("%s ignored: non-regular file", cdsObject.FilePath())
+		me.Logger.Printf("%s ignored: non-regular file", cdsObject.FilePath())
 		return
 	}
 	mimeType, err := MimeTypeByPath(entryFilePath)
@@ -59,7 +60,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		return
 	}
 	if !mimeType.IsMedia() {
-		log.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
+		me.Logger.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
 		return
 	}
 	iconURI := (&url.URL{
@@ -92,7 +93,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 			}
 		case ffprobe.ExeNotFound:
 		default:
-			log.Printf("error probing %s: %s", entryFilePath, probeErr)
+			me.Logger.Printf("error probing %s: %s", entryFilePath, probeErr)
 		}
 	}
 	if obj.Title == "" {
@@ -171,7 +172,7 @@ func (me *contentDirectoryService) readContainer(o object, host, userAgent strin
 		child := object{path.Join(o.Path, fi.Name()), me.RootObjectPath}
 		obj, err := me.cdsObjectToUpnpavObject(child, fi, host, userAgent)
 		if err != nil {
-			log.Printf("error with %s: %s", child.FilePath(), err)
+			me.Logger.Printf("error with %s: %s", child.FilePath(), err)
 			continue
 		}
 		if obj != nil {
@@ -318,7 +319,7 @@ type object struct {
 func (cds *contentDirectoryService) objectChildCount(me object) int {
 	objs, err := cds.readContainer(me, "", "")
 	if err != nil {
-		log.Printf("error reading container: %s", err)
+		cds.Logger.Printf("error reading container: %s", err)
 	}
 	return len(objs)
 }

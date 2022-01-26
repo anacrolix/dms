@@ -2,13 +2,14 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -20,10 +21,9 @@ import (
 	"syscall"
 	"time"
 
-	_ "embed"
-
 	"github.com/anacrolix/dms/dlna/dms"
 	"github.com/anacrolix/dms/rrcache"
+	"github.com/anacrolix/log"
 	"github.com/nfnt/resize"
 )
 
@@ -112,8 +112,13 @@ func (fc *fFprobeCache) Set(key interface{}, value interface{}) {
 }
 
 func main() {
-	log.SetFlags(log.Ltime | log.Lshortfile)
+	err := mainErr()
+	if err != nil {
+		log.Fatalf("error in main: %v", err)
+	}
+}
 
+func mainErr() error {
 	path := flag.String("path", config.Path, "browse root path")
 	ifName := flag.String("ifname", config.IfName, "specific SSDP network interface")
 	http := flag.String("http", config.Http, "http server port")
@@ -134,8 +139,10 @@ func main() {
 	flag.Parse()
 	if flag.NArg() != 0 {
 		flag.Usage()
-		log.Fatalf("%s: %s\n", "unexpected positional arguments", flag.Args())
+		return fmt.Errorf("%s: %s\n", "unexpected positional arguments", flag.Args())
 	}
+
+	logger := log.Default.WithNames("main")
 
 	config.Path, _ = filepath.Abs(*path)
 	config.IfName = *ifName
@@ -147,8 +154,8 @@ func main() {
 	config.AllowedIpNets = makeIpNets(*allowedIps)
 	config.ForceTranscodeTo = *forceTranscodeTo
 
-	log.Printf("allowed ip nets are %q", config.AllowedIpNets)
-	log.Printf("serving folder %q", config.Path)
+	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
+	logger.Printf("serving folder %q", config.Path)
 
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
@@ -162,6 +169,7 @@ func main() {
 	}
 
 	dmsServer := &dms.Server{
+		Logger: logger.WithNames("dms", "server"),
 		Interfaces: func(ifName string) (ifs []net.Interface) {
 			var err error
 			if ifName == "" {
@@ -240,6 +248,7 @@ func main() {
 	if err := cache.save(config.FFprobeCachePath); err != nil {
 		log.Print(err)
 	}
+	return nil
 }
 
 func (cache *fFprobeCache) load(path string) error {
