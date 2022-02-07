@@ -49,3 +49,46 @@ Known Compatible Players and Renderers
  * Chromecast
  * VLC
  * LG Smart TVs, with varying success.
+
+
+Usage of dms:
+=====================
+
+.. list-table:: Usage
+   :widths: auto
+   :header-rows: 1
+
+   * - parameter
+     - description
+   * - ``-allowedIps string``
+     - allowed ip of clients, separated by comma
+   * - ``-config string``
+     - json configuration file
+   * - ``-deviceIcon string``
+     - device icon
+   * - ``-fFprobeCachePath string``
+     - path to FFprobe cache file (default "/home/efreak/.dms-ffprobe-cache")
+   * - ``-forceTranscodeTo string``
+     - force transcoding to certain format, supported: 'chromecast', 'vp8'
+   * - ``-friendlyName string``
+     - server friendly name
+   * - ``-http string``
+     - http server port (default ":1338")
+   * - ``-ifname string``
+     - specific SSDP network interface
+   * - ``-ignoreHidden``
+     - ignore hidden files and directories
+   * - ``-ignoreUnreadable``
+     - ignore unreadable files and directories
+   * - ``-logHeaders``
+     - log HTTP headers
+   * - ``-noProbe``
+     - disable media probing with ffprobe
+   * - ``-noTranscode``
+     - disable transcoding
+   * - ``-notifyInterval duration``
+     - interval between SSPD announces (default 30s)
+   * - ``-path string``
+     - browse root path
+   * - ``-stallEventSubscribe``
+     - workaround for some bad event subscribers
