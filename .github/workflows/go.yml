@@ -33,3 +33,51 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      -
+        name: Upload artifact dms_linux_arm64
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_linux_arm64
+          path: dist/dms_linux_arm64/dms
+      -
+        name: Upload artifact dms_linux_amd64
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_linux_amd64
+          path: dist/dms_linux_amd64/dms
+      -
+        name: Upload artifact dms_linux_386
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_linux_386
+          path: dist/dms_linux_386/dms
+      -
+        name: Upload artifact dms_linux_arm
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_linux_arm
+          path: dist/dms_linux_arm/dms
+      -
+        name: Upload artifact dms_darwin_arm64
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_darwin_arm64
+          path: dist/dms_darwin_arm64/dms
+      -
+        name: Upload artifact dms_darwin_amd64
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_darwin_amd64
+          path: dist/dms_darwin_amd64/dms
+      -
+        name: Upload artifact dms_darwin_386
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_darwin_386
+          path: dist/dms_darwin_386/dms
+      -
+        name: Upload artifact dms_darwin_arm
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_darwin_arm
+          path: dist/dms_darwin_arm/dms
