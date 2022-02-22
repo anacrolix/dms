@@ -1,0 +1,30 @@
+# .goreleaser.yaml
+builds:
+  # You can have multiple builds defined as a yaml list
+  -
+    # ID of the build.
+    # Defaults to the project name.
+    id: "my-build"
+
+    # Optionally override the matrix generation and specify only the final list of targets.
+    # Format is `{goos}_{goarch}` with optionally a suffix with `_{goarm}` or `_{gomips}`.
+    # This overrides `goos`, `goarch`, `goarm`, `gomips` and `ignores`.
+    targets:
+      - linux_amd64
+      - linux_386
+      - linux_arm_6
+      - linux_arm_7
+      - darwin_arm64
+      - darwin_amd64
+      - windows_arm
+      - windows_amd64
+      - windows_386
+
+    # By default, GoRelaser will create your binaries inside `dist/${BuildID}_${BuildTarget}`, which is an unique directory per build target in the matrix.
+    # You are able to set subdirs within that folder using the `binary` property.
+    #
+    # However, if for some reason you don't want that unique directory to be created, you can set this property.
+    # If you do, you are responsible of keeping different builds from overriding each other.
+    #
+    # Defaults to `false`.
+    #no_unique_dist_dir: true

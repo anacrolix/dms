@@ -28,17 +28,11 @@ jobs:
           # either 'goreleaser' (default) or 'goreleaser-pro'
           distribution: goreleaser
           version: latest
-          args: release --rm-dist
+          args: release --rm-dist --config ${{ github.workspace }}/.github/goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-      -
-        name: Upload artifact dms_linux_arm64
-        uses: actions/upload-artifact@v2
-        with:
-          name: dms_linux_arm64
-          path: dist/dms_linux_arm64/dms
       -
         name: Upload artifact dms_linux_amd64
         uses: actions/upload-artifact@v2
@@ -52,11 +46,17 @@ jobs:
           name: dms_linux_386
           path: dist/dms_linux_386/dms
       -
-        name: Upload artifact dms_linux_arm
+        name: Upload artifact dms_linux_arm_6
         uses: actions/upload-artifact@v2
         with:
-          name: dms_linux_arm
-          path: dist/dms_linux_arm/dms
+          name: dms_linux_arm_6
+          path: dist/dms_linux_arm_6/dms
+      -
+        name: Upload artifact dms_linux_arm_7
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_linux_arm_7
+          path: dist/dms_linux_arm_7/dms
       -
         name: Upload artifact dms_darwin_arm64
         uses: actions/upload-artifact@v2
@@ -70,14 +70,20 @@ jobs:
           name: dms_darwin_amd64
           path: dist/dms_darwin_amd64/dms
       -
-        name: Upload artifact dms_darwin_386
+        name: Upload artifact dms_windows_arm
         uses: actions/upload-artifact@v2
         with:
-          name: dms_darwin_386
-          path: dist/dms_darwin_386/dms
+          name: dms_windows_arm
+          path: dist/dms_windows_arm/dms
       -
-        name: Upload artifact dms_darwin_arm
+        name: Upload artifact dms_windows_amd64
         uses: actions/upload-artifact@v2
         with:
-          name: dms_darwin_arm
-          path: dist/dms_darwin_arm/dms
+          name: dms_windows_amd64
+          path: dist/dms_windows_amd64/dms
+      -
+        name: Upload artifact dms_windows_386
+        uses: actions/upload-artifact@v2
+        with:
+          name: dms_windows_386
+          path: dist/dms_windows_386/dms
