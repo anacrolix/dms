@@ -4,8 +4,8 @@ go 1.16
 
 require (
 	github.com/anacrolix/ffprobe v1.0.0
-	github.com/anacrolix/log v0.10.1-0.20220126091220-5c1b6f3af59c
+	github.com/anacrolix/log v0.13.1
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
-	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
-	golang.org/x/sys v0.0.0-20211023085530-d6a326fbbf70
+	golang.org/x/net v0.0.0-20220524220425-1d687d428aca
+	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
 )
