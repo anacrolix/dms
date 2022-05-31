@@ -229,16 +229,18 @@ type Icon struct {
 }
 
 type Server struct {
-	HTTPConn       net.Listener
-	FriendlyName   string
-	Interfaces     []net.Interface
-	httpServeMux   *http.ServeMux
-	RootObjectPath string
-	rootDescXML    []byte
-	rootDeviceUUID string
-	FFProbeCache   Cache
-	closed         chan struct{}
-	ssdpStopped    chan struct{}
+	HTTPConn               net.Listener
+	FriendlyName           string
+	Interfaces             []net.Interface
+	httpServeMux           *http.ServeMux
+	RootObjectPath         string
+	OnBrowseDirectChildren func(path string, rootObjectPath string, host, userAgent string) (ret []interface{}, err error)
+	OnBrowseMetadata       func(path string, rootObjectPath string, host, userAgent string) (ret interface{}, err error)
+	rootDescXML            []byte
+	rootDeviceUUID         string
+	FFProbeCache           Cache
+	closed                 chan struct{}
+	ssdpStopped            chan struct{}
 	// The service SOAP handler keyed by service URN.
 	services   map[string]UPnPService
 	LogHeaders bool
@@ -731,6 +733,7 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 }
 
 func (server *Server) initMux(mux *http.ServeMux) {
+	// Handle root (presentationURL)
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		resp.Header().Set("content-type", "text/html")
 		err := rootTmpl.Execute(resp, struct {
