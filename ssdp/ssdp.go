@@ -84,7 +84,7 @@ type Server struct {
 	Server         string
 	Services       []string
 	Devices        []string
-	IPfilter       func(net.IP) bool
+	IPFilter       func(net.IP) bool
 	Location       func(net.IP) string
 	UUID           string
 	NotifyInterval time.Duration
@@ -133,8 +133,8 @@ func (me *Server) serve() {
 func (me *Server) Init() (err error) {
 	me.closed = make(chan struct{})
 	me.conn, err = makeConn(me.Interface)
-	if (me.IPfilter == nil) {
-		me.IPfilter = func(net.IP) bool { return true }
+	if me.IPFilter == nil {
+		me.IPFilter = func(net.IP) bool { return true }
 	}
 	return
 }
@@ -162,7 +162,9 @@ func (me *Server) Serve() (err error) {
 				}
 				panic(fmt.Sprint("unexpected addr type:", addr))
 			}()
-			if (!me.IPfilter(ip)) { continue }
+			if !me.IPFilter(ip) {
+				continue
+			}
 			if ip.IsLinkLocalUnicast() {
 				// These addresses seem to confuse VLC. Possibly there's supposed to be a zone
 				// included in the address, but I don't see one.
