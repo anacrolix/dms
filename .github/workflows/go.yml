@@ -35,55 +35,55 @@ jobs:
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       -
         name: Upload artifact dms_linux_amd64
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_linux_amd64
           path: dist/my-build_linux_amd64/dms
       -
         name: Upload artifact dms_linux_386
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_linux_386
           path: dist/my-build_linux_386/dms
       -
         name: Upload artifact dms_linux_arm_6
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_linux_arm_6
           path: dist/my-build_linux_arm_6/dms
       -
         name: Upload artifact dms_linux_arm_7
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_linux_arm_7
           path: dist/my-build_linux_arm_7/dms
       -
         name: Upload artifact dms_darwin_arm64
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_darwin_arm64
           path: dist/my-build_darwin_arm64/dms
       -
         name: Upload artifact dms_darwin_amd64
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_darwin_amd64
           path: dist/my-build_darwin_amd64/dms
       -
         name: Upload artifact dms_windows_arm.exe
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_windows_arm
           path: dist/my-build_windows_arm/dms.exe
       -
         name: Upload artifact dms_windows_amd64.exe
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_windows_amd64
           path: dist/my-build_windows_amd64/dms.exe
       -
         name: Upload artifact dms_windows_386.exe
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: dms_windows_386
           path: dist/my-build_windows_386/dms.exe
