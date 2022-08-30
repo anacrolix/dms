@@ -46,6 +46,7 @@ const (
 	rootDeviceType              = "urn:schemas-upnp-org:device:MediaServer:1"
 	resPath                     = "/res"
 	iconPath                    = "/icon"
+	subtitlePath                = "/subtitle"
 	rootDescPath                = "/rootDesc.xml"
 	contentDirectoryEventSubURL = "/evt/ContentDirectory"
 	serviceControlURL           = "/ctl"
@@ -624,6 +625,12 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
 }
 
+func (me *Server) serveSubtitle(w http.ResponseWriter, r *http.Request) {
+	filePath := me.filePath(r.URL.Query().Get("path"))
+	subtitleFilePath := strings.TrimSuffix(filePath, filepath.Ext(filePath)) + ".srt"
+	http.ServeFile(w, r, subtitleFilePath)
+}
+
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
 	body := xmlMarshalOrPanic(upnp.PropertySet{
 		Properties: []upnp.Property{
@@ -749,6 +756,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	})
 	mux.HandleFunc(contentDirectoryEventSubURL, server.contentDirectoryEventSubHandler)
 	mux.HandleFunc(iconPath, server.serveIcon)
+	mux.HandleFunc(subtitlePath, server.serveSubtitle)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		filePath := server.filePath(r.URL.Query().Get("path"))
 		if ignored, err := server.IgnorePath(filePath); err != nil {
