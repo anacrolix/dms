@@ -779,6 +779,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 				return
 			}
 			w.Header().Set("Content-Type", string(mimeType))
+			w.Header().Set("Content-disposition", `attachment; filename="`+path.Base(filePath)+`"`)
 			http.ServeFile(w, r, filePath)
 			return
 		}
