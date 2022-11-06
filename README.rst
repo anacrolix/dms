@@ -1,9 +1,6 @@
 dms
 ===
 
-.. image:: https://circleci.com/gh/anacrolix/dms.svg?style=svg
-    :target: https://circleci.com/gh/anacrolix/dms
-
 dms is a UPnP DLNA Digital Media Server. It runs from the terminal, and serves
 content directly from the filesystem from the working directory, or the path
 given. The SSDP component will broadcast and respond to requests on all
