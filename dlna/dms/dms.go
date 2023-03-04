@@ -70,6 +70,23 @@ var transcodes = map[string]transcodeSpec{
 	"web":        {mimeType: "video/mp4", Transcode: transcode.WebTranscode},
 }
 
+var dynamicStreamProviders = map[string]transcodeSpec{
+	".mpg": {
+		mimeType:        "video/mpeg",
+		DLNAProfileName: "MPEG_PS_PAL",
+		Transcode:       transcode.Exec,
+	},
+	".mkv": {
+		mimeType:        "video/webm",
+		Transcode:       transcode.Exec,
+	},
+	".mp4": {
+		mimeType:        "video/mp4",
+		Transcode:       transcode.Exec,
+	},
+}
+
+
 func makeDeviceUuid(unique string) string {
 	h := md5.New()
 	if _, err := io.WriteString(h, unique); err != nil {
@@ -265,6 +282,7 @@ type Server struct {
 	AllowedIpNets  []*net.IPNet
 	Logger         log.Logger
 	eventingLogger log.Logger
+	AllowDynamicStreams bool
 }
 
 // UPnP SOAP service.
@@ -324,10 +342,8 @@ type ffmpegInfoCacheKey struct {
 	ModTime int64
 }
 
-func transcodeResources(host, path, resolution, duration string) (ret []upnpav.Resource) {
-	ret = make([]upnpav.Resource, 0, len(transcodes))
-	for k, v := range transcodes {
-		ret = append(ret, upnpav.Resource{
+func addTranscodeResource(host, path, resolution, duration string, k string, v *transcodeSpec) (upnpav.Resource) {
+    return upnpav.Resource{
 			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", v.mimeType, dlna.ContentFeatures{
 				SupportTimeSeek: true,
 				Transcoded:      true,
@@ -344,7 +360,12 @@ func transcodeResources(host, path, resolution, duration string) (ret []upnpav.R
 			}).String(),
 			Resolution: resolution,
 			Duration:   duration,
-		})
+		}
+}
+func transcodeResources(host, path, resolution, duration string) (ret []upnpav.Resource) {
+	ret = make([]upnpav.Resource, 0, len(transcodes))
+	for k, v := range transcodes {
+		ret = append(ret, addTranscodeResource(host, path, resolution, duration, k, &v))
 	}
 	return
 }
@@ -780,6 +801,15 @@ func (server *Server) initMux(mux *http.ServeMux) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			// we do not want to leak the source code of the scripts
+			// that generate streams on the fly
+			if server.AllowDynamicStreams && !mimeType.IsVideo() {
+				ext := filepath.Ext(filePath)
+				if _, ok:= dynamicStreamProviders[ext]; ok {
+					w.WriteHeader(404)
+					return
+				}
+			}
 			w.Header().Set("Content-Type", string(mimeType))
 			http.ServeFile(w, r, filePath)
 			return
@@ -790,8 +820,13 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		}
 		spec, ok := transcodes[k]
 		if !ok {
-			http.Error(w, fmt.Sprintf("bad transcode spec key: %s", k), http.StatusBadRequest)
-			return
+			if server.AllowDynamicStreams {
+				spec, ok = dynamicStreamProviders[k]
+			}
+			if !ok {
+				http.Error(w, fmt.Sprintf("bad transcode spec key: %s", k), http.StatusBadRequest)
+				return
+			}
 		}
 		server.serveDLNATranscode(w, r, filePath, spec, k)
 	})

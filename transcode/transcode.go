@@ -97,6 +97,12 @@ func Transcode(path string, start, length time.Duration, stderr io.Writer) (r io
 	return transcodePipe(args, stderr)
 }
 
+// Streams the desired file in the MPEG_PS_PAL DLNA profile.
+func Exec(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error) {
+	args := []string{path}
+	return transcodePipe(args, stderr)
+}
+
 // Returns a stream of Chromecast supported VP8.
 func VP8Transcode(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error) {
 	args := []string{

@@ -46,6 +46,7 @@ type dmsConfig struct {
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
 	AllowedIpNets       []*net.IPNet
+	AllowDynamicStreams bool
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -65,14 +66,15 @@ func (config *dmsConfig) load(configPath string) {
 
 // default config
 var config = &dmsConfig{
-	Path:             "",
-	IfName:           "",
-	Http:             ":1338",
-	FriendlyName:     "",
-	DeviceIcon:       "",
-	LogHeaders:       false,
-	FFprobeCachePath: getDefaultFFprobeCachePath(),
-	ForceTranscodeTo: "",
+	Path:                "",
+	IfName:              "",
+	Http:                ":1338",
+	FriendlyName:        "",
+	DeviceIcon:          "",
+	LogHeaders:          false,
+	FFprobeCachePath:    getDefaultFFprobeCachePath(),
+	ForceTranscodeTo:    "",
+	AllowDynamicStreams: false,
 }
 
 func getDefaultFFprobeCachePath() (path string) {
@@ -135,6 +137,7 @@ func mainErr() error {
 	flag.DurationVar(&config.NotifyInterval, "notifyInterval", 30*time.Second, "interval between SSPD announces")
 	flag.BoolVar(&config.IgnoreHidden, "ignoreHidden", false, "ignore hidden files and directories")
 	flag.BoolVar(&config.IgnoreUnreadable, "ignoreUnreadable", false, "ignore unreadable files and directories")
+	flag.BoolVar(&config.AllowDynamicStreams, "allowDynamicStreams", false, "allow dynamic streams")
 
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -201,13 +204,14 @@ func mainErr() error {
 			}
 			return conn
 		}(),
-		FriendlyName:     config.FriendlyName,
-		RootObjectPath:   filepath.Clean(config.Path),
-		FFProbeCache:     cache,
-		LogHeaders:       config.LogHeaders,
-		NoTranscode:      config.NoTranscode,
-		ForceTranscodeTo: config.ForceTranscodeTo,
-		NoProbe:          config.NoProbe,
+		FriendlyName:        config.FriendlyName,
+		RootObjectPath:      filepath.Clean(config.Path),
+		FFProbeCache:        cache,
+		LogHeaders:          config.LogHeaders,
+		NoTranscode:         config.NoTranscode,
+		ForceTranscodeTo:    config.ForceTranscodeTo,
+		AllowDynamicStreams: config.AllowDynamicStreams,
+		NoProbe:             config.NoProbe,
 		Icons: []dms.Icon{
 			{
 				Width:    48,

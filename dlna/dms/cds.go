@@ -59,9 +59,27 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	if err != nil {
 		return
 	}
+	itemType := mimeType.Type()
+	supportRange:= true
+	dynamicMode:= false
+	dynamicStreamProviderName := ""
+	var dynamicStreamProvider *transcodeSpec
+
 	if !mimeType.IsMedia() {
-		me.Logger.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
-		return
+		if me.AllowDynamicStreams {
+			extension := filepath.Ext(entryFilePath)
+			if tr, ok := dynamicStreamProviders[extension]; ok {
+				dynamicMode = true
+				itemType = "video"
+				supportRange = false
+				dynamicStreamProvider = &tr
+				dynamicStreamProviderName = extension
+			}
+		}
+		if !dynamicMode {
+			me.Logger.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
+			return
+		}
 	}
 	iconURI := (&url.URL{
 		Scheme: "http",
@@ -75,13 +93,14 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	// TODO(anacrolix): This might not be necessary due to item res image
 	// element.
 	obj.AlbumArtURI = iconURI
-	obj.Class = "object.item." + mimeType.Type() + "Item"
+
+	obj.Class = "object.item." + itemType + "Item"
 	var (
 		ffInfo        *ffprobe.Info
 		nativeBitrate uint
 		resDuration   string
 	)
-	if !me.NoProbe {
+	if !me.NoProbe && !dynamicMode {
 		ffInfo, probeErr := me.ffmpegProbe(entryFilePath)
 		switch probeErr {
 		case nil:
@@ -117,38 +136,46 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		// Capacity: 1 for raw, 1 for icon, plus transcodes.
 		Res: make([]upnpav.Resource, 0, 2+len(transcodes)),
 	}
-	item.Res = append(item.Res, upnpav.Resource{
-		URL: (&url.URL{
-			Scheme: "http",
-			Host:   host,
-			Path:   resPath,
-			RawQuery: url.Values{
-				"path": {cdsObject.Path},
-			}.Encode(),
-		}).String(),
-		ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
-			SupportRange: true,
-		}.String()),
-		Bitrate:    nativeBitrate,
-		Duration:   resDuration,
-		Size:       uint64(fileInfo.Size()),
-		Resolution: resolution,
-	})
-	if mimeType.IsVideo() {
-		if !me.NoTranscode {
-			item.Res = append(item.Res, transcodeResources(host, cdsObject.Path, resolution, resDuration)...)
-		}
+	if !dynamicMode { // we dont list the "main item" without a transcode parameter
 		item.Res = append(item.Res, upnpav.Resource{
 			URL: (&url.URL{
 				Scheme: "http",
 				Host:   host,
-				Path:   subtitlePath,
+				Path:   resPath,
 				RawQuery: url.Values{
 					"path": {cdsObject.Path},
 				}.Encode(),
 			}).String(),
-			ProtocolInfo: "http-get:*:text/plain",
+			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", mimeType, dlna.ContentFeatures{
+				SupportRange: supportRange,
+			}.String()),
+			Bitrate:    nativeBitrate,
+			Duration:   resDuration,
+			Size:       uint64(fileInfo.Size()),
+			Resolution: resolution,
 		})
+	}
+	if mimeType.IsVideo() || dynamicMode {
+		if !me.NoTranscode {
+			if !dynamicMode {
+				item.Res = append(item.Res, transcodeResources(host, cdsObject.Path, resolution, resDuration)...)
+			} else {
+				item.Res = append(item.Res, addTranscodeResource(host, cdsObject.Path, resolution, resDuration, dynamicStreamProviderName, dynamicStreamProvider))
+			}
+		}
+		if !dynamicMode { // subtitles make no sense in dynamic mode
+			item.Res = append(item.Res, upnpav.Resource{
+				URL: (&url.URL{
+					Scheme: "http",
+					Host:   host,
+					Path:   subtitlePath,
+					RawQuery: url.Values{
+						"path": {cdsObject.Path},
+					}.Encode(),
+				}).String(),
+				ProtocolInfo: "http-get:*:text/plain",
+			})
+		}
 	}
 	if mimeType.IsVideo() || mimeType.IsImage() {
 		item.Res = append(item.Res, upnpav.Resource{
