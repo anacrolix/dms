@@ -592,6 +592,8 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 		return marshalSOAPResponse(soapAction, respArgs), 200
 	}()
 	bodyStr := fmt.Sprintf(`<?xml version="1.0" encoding="utf-8" standalone="yes"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>%s</s:Body></s:Envelope>`, soapRespXML)
+	// Compatibility with Samsung Frame TV's - they don't display an empty content directory without this hack:
+	bodyStr = strings.Replace(bodyStr, "&#34;", `"`, -1)
 	w.WriteHeader(code)
 	if _, err := w.Write([]byte(bodyStr)); err != nil {
 		log.Print(err)
