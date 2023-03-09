@@ -56,6 +56,7 @@ const (
 type transcodeSpec struct {
 	mimeType        string
 	DLNAProfileName string
+	DLNAFlags       string
 	Transcode       func(path string, start, length time.Duration, stderr io.Writer) (r io.ReadCloser, err error)
 }
 
@@ -262,9 +263,13 @@ type Server struct {
 	// Ingnore unreadable files and directories
 	IgnoreUnreadable bool
 	// White list of clients
-	AllowedIpNets  []*net.IPNet
-	Logger         log.Logger
-	eventingLogger log.Logger
+	AllowedIpNets []*net.IPNet
+	// Activate support for dynamic streams configured via .dms.json metadata files
+	// This feature is not enabled by default, since having write access to a shared media
+	// folder allows executing arbitrary commands in the context of the DLNA server.
+	AllowDynamicStreams bool
+	Logger              log.Logger
+	eventingLogger      log.Logger
 }
 
 // UPnP SOAP service.
@@ -364,8 +369,8 @@ func parseDLNARangeHeader(val string) (ret dlna.NPTRange, err error) {
 // Determines the time-based range to transcode, and sets the appropriate
 // headers. Returns !ok if there was an error and the caller should stop
 // handling the request.
-func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, partialResponse, ok bool) {
-	if len(hs[http.CanonicalHeaderKey(dlna.TimeSeekRangeDomain)]) == 0 {
+func handleDLNARange(w http.ResponseWriter, hs http.Header, dynamicMode bool) (r dlna.NPTRange, partialResponse, ok bool) {
+	if dynamicMode || len(hs[http.CanonicalHeaderKey(dlna.TimeSeekRangeDomain)]) == 0 {
 		ok = true
 		return
 	}
@@ -385,32 +390,61 @@ func handleDLNARange(w http.ResponseWriter, hs http.Header) (r dlna.NPTRange, pa
 	return
 }
 
-func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string, ts transcodeSpec, tsname string) {
+func writeResponseCode(w http.ResponseWriter, partialResponse bool) {
+	w.WriteHeader(func() int {
+		if partialResponse {
+			return http.StatusPartialContent
+		} else {
+			return http.StatusOK
+		}
+	}())
+}
+
+func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, path_ string, ts transcodeSpec, tsname string, dynamicMode bool) {
 	w.Header().Set(dlna.TransferModeDomain, "Streaming")
 	w.Header().Set("content-type", ts.mimeType)
 	w.Header().Set(dlna.ContentFeaturesDomain, (dlna.ContentFeatures{
 		Transcoded:      true,
-		SupportTimeSeek: true,
+		SupportTimeSeek: !dynamicMode,
+		ProfileName:     ts.DLNAProfileName,
+		Flags:           ts.DLNAFlags,
 	}).String())
 	// If a range of any kind is given, we have to respond with 206 if we're
 	// interpreting that range. Since only the DLNA range is handled in this
 	// function, it alone determines if we'll give a partial response.
-	range_, partialResponse, ok := handleDLNARange(w, r.Header)
+	range_, partialResponse, ok := handleDLNARange(w, r.Header, dynamicMode)
 	if !ok {
 		return
 	}
-	ffInfo, _ := me.ffmpegProbe(path_)
-	if ffInfo != nil {
-		if duration, err := ffInfo.Duration(); err == nil {
-			s := fmt.Sprintf("%f", duration.Seconds())
-			w.Header().Set("content-duration", s)
-			w.Header().Set("x-content-duration", s)
-		}
+
+	// Samsung Frame TVs send a HEAD request first. If we don't terminate processing here,
+	// the TV will keep reading the data and crash eventually :)
+	if r.Method == "HEAD" {
+		writeResponseCode(w, partialResponse)
+		return
 	}
-	stderrPath := func() string {
-		u, _ := user.Current()
-		return filepath.Join(u.HomeDir, ".dms", "log", tsname, filepath.Base(path_))
-	}()
+
+	var stderrPath string
+	if !dynamicMode {
+		ffInfo, _ := me.ffmpegProbe(path_)
+		if ffInfo != nil {
+			if duration, err := ffInfo.Duration(); err == nil {
+				s := fmt.Sprintf("%f", duration.Seconds())
+				w.Header().Set("content-duration", s)
+				w.Header().Set("x-content-duration", s)
+			}
+		}
+
+		stderrPath = func() string {
+			u, _ := user.Current()
+			return filepath.Join(u.HomeDir, ".dms", "log", tsname, filepath.Base(path_))
+		}()
+	} else {
+		stderrPath = func() string {
+			u, _ := user.Current()
+			return filepath.Join(u.HomeDir, ".dms", "log", tsname)
+		}()
+	}
 	os.MkdirAll(filepath.Dir(stderrPath), 0o750)
 	logFile, err := os.Create(stderrPath)
 	if err != nil {
@@ -429,13 +463,7 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 	// pure UPnP clients. It's possible that DLNA clients will *always* expect
 	// 206. It appears the HTTP standard requires that 206 only be used if a
 	// response is not interpreting any range headers.
-	w.WriteHeader(func() int {
-		if partialResponse {
-			return http.StatusPartialContent
-		} else {
-			return http.StatusOK
-		}
-	}())
+	writeResponseCode(w, partialResponse)
 	io.Copy(w, p)
 }
 
@@ -741,6 +769,35 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 	}
 }
 
+func (server *Server) serveDynamicStream(w http.ResponseWriter, r *http.Request, metadataPath string) error {
+	dmsMediaItem, err := readDynamicStream(metadataPath)
+	if err != nil {
+		return err
+	}
+
+	aindex := 0
+	index := r.URL.Query().Get("index")
+	if index != "" {
+		aindex, err = strconv.Atoi(index)
+		if err != nil {
+			return err
+		}
+	}
+
+	if aindex < 0 || aindex >= len(dmsMediaItem.Resources) {
+		return fmt.Errorf("invalid index %d, corresponding stream not found", aindex)
+	}
+	dmsStream := dmsMediaItem.Resources[aindex]
+	dmsTsSpec := transcodeSpec{
+		DLNAProfileName: dmsStream.DlnaProfileName,
+		DLNAFlags:       dmsStream.DlnaFlags,
+		mimeType:        dmsStream.MimeType,
+		Transcode:       transcode.Exec,
+	}
+	server.serveDLNATranscode(w, r, dmsStream.Command, dmsTsSpec, filepath.Base(metadataPath), true)
+	return nil
+}
+
 func (server *Server) initMux(mux *http.ServeMux) {
 	// Handle root (presentationURL)
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
@@ -768,6 +825,18 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			http.Error(w, "no such object", http.StatusNotFound)
 			return
 		}
+		if strings.HasSuffix(filePath, dmsMetadataSuffix) {
+			if server.AllowDynamicStreams {
+				err := server.serveDynamicStream(w, r, filePath)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+				return
+			} else {
+				http.Error(w, "dynamic streams are disabled", http.StatusNotFound)
+				return
+			}
+		}
 		var k string
 		if server.ForceTranscodeTo != "" {
 			k = server.ForceTranscodeTo
@@ -793,7 +862,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			http.Error(w, fmt.Sprintf("bad transcode spec key: %s", k), http.StatusBadRequest)
 			return
 		}
-		server.serveDLNATranscode(w, r, filePath, spec, k)
+		server.serveDLNATranscode(w, r, filePath, spec, k, false)
 	})
 	mux.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)

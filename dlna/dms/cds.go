@@ -1,14 +1,17 @@
 package dms
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/anacrolix/log"
@@ -20,6 +23,8 @@ import (
 	"github.com/anacrolix/ffprobe"
 )
 
+const dmsMetadataSuffix = ".dms.json"
+
 type contentDirectoryService struct {
 	*Server
 	upnp.Eventing
@@ -27,6 +32,127 @@ type contentDirectoryService struct {
 
 func (cds *contentDirectoryService) updateIDString() string {
 	return fmt.Sprintf("%d", uint32(os.Getpid()))
+}
+
+type dmsDynamicStreamResource struct {
+	// (optional) DLNA profile name to include in the response e.g. MPEG_PS_PAL
+	DlnaProfileName string
+	// (optional) DLNA.ORG_FLAGS if you need to override the default (8D500000000000000000000000000000)
+	DlnaFlags string
+	// required: mime type, e.g. video/mpeg
+	MimeType string
+	// (optional) resolution, e.g. 640x360
+	Resolution string
+	// (optional) bitrate, e.g. 721
+	Bitrate uint
+	// required: OS command to generate this resource on the fly
+	Command string
+}
+
+type dmsDynamicMediaItem struct {
+	// (optional) Title of this media item. Defaults to the filename, if omitted
+	Title string
+	// (optional) duration, e.g. 0:21:37.922
+	Duration string
+	// required: an array of available versions
+	Resources []dmsDynamicStreamResource
+}
+
+func readDynamicStream(metadataPath string) (*dmsDynamicMediaItem, error) {
+	bytes, err := ioutil.ReadFile(metadataPath)
+	if err != nil {
+		return nil, err
+	}
+	var re dmsDynamicMediaItem
+	err = json.Unmarshal(bytes, &re)
+	if err != nil {
+		return nil, err
+	}
+	return &re, nil
+}
+
+func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) (ret interface{}, err error) {
+	// at this point we know that entryFilePath points to a .dms.json file; slurp and parse
+	dmsMediaItem, err := readDynamicStream(cdsObject.FilePath())
+	if err != nil {
+		me.Logger.Printf("%s ignored: %v", cdsObject.FilePath(), err)
+		return
+	}
+
+	obj := upnpav.Object{
+		ID:         cdsObject.ID(),
+		Restricted: 1,
+		ParentID:   cdsObject.ParentID(),
+	}
+	iconURI := (&url.URL{
+		Scheme: "http",
+		Host:   host,
+		Path:   iconPath,
+		RawQuery: url.Values{
+			"path": {cdsObject.Path},
+		}.Encode(),
+	}).String()
+	obj.Icon = iconURI
+	// TODO(anacrolix): This might not be necessary due to item res image
+	// element.
+	obj.AlbumArtURI = iconURI
+	obj.Class = "object.item.videoItem"
+
+	obj.Title = dmsMediaItem.Title
+	if obj.Title == "" {
+		obj.Title = strings.TrimSuffix(fileInfo.Name(), dmsMetadataSuffix)
+	}
+
+	item := upnpav.Item{
+		Object: obj,
+		// Capacity: 1 for icon, plus resources.
+		Res: make([]upnpav.Resource, 0, 1+len(dmsMediaItem.Resources)),
+	}
+	for i, dmsStream := range dmsMediaItem.Resources {
+		// default flags borrowed from Serviio: DLNA_ORG_FLAG_SENDER_PACED | DLNA_ORG_FLAG_S0_INCREASE | DLNA_ORG_FLAG_SN_INCREASE | DLNA_ORG_FLAG_STREAMING_TRANSFER_MODE | DLNA_ORG_FLAG_BACKGROUND_TRANSFERT_MODE | DLNA_ORG_FLAG_DLNA_V15
+		flags := "8D500000000000000000000000000000"
+		if dmsStream.DlnaFlags != "" {
+			flags = dmsStream.DlnaFlags
+		}
+		item.Res = append(item.Res, upnpav.Resource{
+			URL: (&url.URL{
+				Scheme: "http",
+				Host:   host,
+				Path:   resPath,
+				RawQuery: url.Values{
+					"path":  {cdsObject.Path},
+					"index": {strconv.Itoa(i)},
+				}.Encode(),
+			}).String(),
+			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", dmsStream.MimeType, dlna.ContentFeatures{
+				ProfileName:     dmsStream.DlnaProfileName,
+				SupportRange:    false,
+				SupportTimeSeek: false,
+				Transcoded:      true,
+				Flags:           flags,
+			}.String()),
+			Bitrate:    dmsStream.Bitrate,
+			Duration:   dmsMediaItem.Duration,
+			Resolution: dmsStream.Resolution,
+		})
+	}
+
+	// and an icon
+	item.Res = append(item.Res, upnpav.Resource{
+		URL: (&url.URL{
+			Scheme: "http",
+			Host:   host,
+			Path:   iconPath,
+			RawQuery: url.Values{
+				"path": {cdsObject.Path},
+				"c":    {"jpeg"},
+			}.Encode(),
+		}).String(),
+		ProtocolInfo: "http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN",
+	})
+
+	ret = item
+	return
 }
 
 // Turns the given entry and DMS host into a UPnP object. A nil object is
@@ -40,6 +166,11 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	if ignored {
 		return
 	}
+	isDmsMetadata := strings.HasSuffix(entryFilePath, dmsMetadataSuffix)
+	if !fileInfo.IsDir() && me.AllowDynamicStreams && isDmsMetadata {
+		return me.cdsObjectDynamicStreamToUpnpavObject(cdsObject, fileInfo, host, userAgent)
+	}
+
 	obj := upnpav.Object{
 		ID:         cdsObject.ID(),
 		Restricted: 1,
@@ -60,7 +191,11 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 		return
 	}
 	if !mimeType.IsMedia() {
-		me.Logger.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
+		if isDmsMetadata {
+			me.Logger.Printf("%s ignored: enable support for dynamic streams via the -allowDynamicStreams command line flag", cdsObject.FilePath())
+		} else {
+			me.Logger.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
+		}
 		return
 	}
 	iconURI := (&url.URL{

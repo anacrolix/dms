@@ -10,6 +10,9 @@ dms advertises and serves the raw files, in addition to alternate transcoded
 streams when it's able, such as mpeg2 PAL-DVD and WebM for the Chromecast. It
 will also provide thumbnails where possible.
 
+dms also supports serving dynamic streams (e.g. a live rtsp stream) generated 
+on the fly with the help of an external application (e.g. ffmpeg).
+
 dms uses ``ffprobe``/``avprobe`` to get media data such as bitrate and duration, ``ffmpeg``/``avconv`` for video transoding, and ``ffmpegthumbnailer`` for generating thumbnails when browsing. These commands must be in the ``PATH`` given to ``dms`` or the features requiring them will be disabled.
 
 .. image:: https://i.imgur.com/qbHilI7.png
@@ -57,6 +60,8 @@ Usage of dms:
 
    * - parameter
      - description
+   * - ``-allowDynamicStreams``
+     - turns on support for `.dms.json` files in the path
    * - ``-allowedIps string``
      - allowed ip of clients, separated by comma
    * - ``-config string``
@@ -89,3 +94,24 @@ Usage of dms:
      - browse root path
    * - ``-stallEventSubscribe``
      - workaround for some bad event subscribers
+
+Dynamic streams
+===============
+DMS supports "dynamic streams" generated on the fly. This feature can be activated with the
+`-allowDynamicStreams` command line flag and can be configured by placing special metadata
+files in your content directory.
+The name of these metadata files ends with `.dms.json`, their structure is [documented here](https://pkg.go.dev/github.com/anacrolix/dms/dlna/dms)
+
+An example:
+
+```
+{
+  "Title": "My awesome webcam",
+  "Resources": [
+     {
+        "MimeType": "video/webm",
+        "Command": "ffmpeg -i rtsp://10.6.8.161:554/Streaming/Channels/502/ -c:v copy -c:a copy -movflags +faststart+frag_keyframe+empty_moov -f matroska -"
+     }
+  ]
+}
+```
