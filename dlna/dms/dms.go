@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -614,7 +615,19 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	if c == "" {
 		c = "png"
 	}
-	cmd := exec.Command("ffmpegthumbnailer", "-i", filePath, "-o", "/dev/stdout", "-c"+c)
+	args := []string{}
+	_, fqThumbnail := os.LookupEnv("DMS_THUMBNAIL_FULLQUALITY")
+	if fqThumbnail {
+		args = append(args, "-s", "0", "-q", "10")
+	}
+
+	_, randThumbnail := os.LookupEnv("DMS_THUMBNAIL_RANDOM")
+	if randThumbnail {
+		args = append(args, "-t", strconv.Itoa(rand.Intn(100)))
+	}
+
+	args = append(args, "-i", filePath, "-o", "/dev/stdout", "-c"+c)
+	cmd := exec.Command("ffmpegthumbnailer", args...)
 	// cmd.Stderr = os.Stderr
 	body, err := cmd.Output()
 	if err != nil {
