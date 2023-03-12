@@ -1,19 +1,15 @@
-FROM golang
+FROM docker.io/alpine:edge AS build
+WORKDIR /dms
+ADD . /dms
+RUN apk add --no-cache go gcc musl-dev
+RUN go mod tidy 
+RUN go build -trimpath -buildmode=pie -ldflags="-s -w" -o dms
 
-RUN \
-  apt-get update && \
-  DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends \
-      ffmpeg \
-      ffmpegthumbnailer \
-  && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/* && \
-  touch /root/.dms-ffprobe-cache
 
-COPY . /go/src/github.com/anacrolix/dms/
-WORKDIR /go/src/github.com/anacrolix/dms/
-RUN \
-  go build -v .
-
-ENTRYPOINT [ "./dms" ]
+FROM docker.io/alpine:edge
+COPY --from=build --chown=1000:1000 /dms/dms /dms
+RUN apk add --no-cache ffmpeg ffmpegthumbnailer mailcap
+USER 1000:1000
+WORKDIR /dmsdir
+VOLUME /dmsdir
+ENTRYPOINT ["/dms"]

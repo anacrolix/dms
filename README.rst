@@ -27,6 +27,16 @@ To run::
 
     $ "$GOPATH"/bin/dms
 
+Running DMS using Docker
+========================
+
+`dms` is distributed as Docker Image. Serve Media in `/mediadirectory` using `dms`:
+
+.. code-block:: bash
+
+   docker pull ghcr.io/anacrolix/dms:latest
+   docker run -d --network host -v /mediadirectory:/dmsdir ghcr.io/anacrolix/dms:latest
+
 Running DMS as a systemd service
 =================================
 
