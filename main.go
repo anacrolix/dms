@@ -46,6 +46,7 @@ type dmsConfig struct {
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
 	AllowedIpNets       []*net.IPNet
+	AllowDynamicStreams bool
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -135,6 +136,7 @@ func mainErr() error {
 	flag.DurationVar(&config.NotifyInterval, "notifyInterval", 30*time.Second, "interval between SSPD announces")
 	flag.BoolVar(&config.IgnoreHidden, "ignoreHidden", false, "ignore hidden files and directories")
 	flag.BoolVar(&config.IgnoreUnreadable, "ignoreUnreadable", false, "ignore unreadable files and directories")
+	flag.BoolVar(&config.AllowDynamicStreams, "allowDynamicStreams", false, "activate support for dynamic streams described via .dms.json metadata files")
 
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -201,13 +203,14 @@ func mainErr() error {
 			}
 			return conn
 		}(),
-		FriendlyName:     config.FriendlyName,
-		RootObjectPath:   filepath.Clean(config.Path),
-		FFProbeCache:     cache,
-		LogHeaders:       config.LogHeaders,
-		NoTranscode:      config.NoTranscode,
-		ForceTranscodeTo: config.ForceTranscodeTo,
-		NoProbe:          config.NoProbe,
+		FriendlyName:        config.FriendlyName,
+		RootObjectPath:      filepath.Clean(config.Path),
+		FFProbeCache:        cache,
+		LogHeaders:          config.LogHeaders,
+		NoTranscode:         config.NoTranscode,
+		AllowDynamicStreams: config.AllowDynamicStreams,
+		ForceTranscodeTo:    config.ForceTranscodeTo,
+		NoProbe:             config.NoProbe,
 		Icons: []dms.Icon{
 			{
 				Width:    48,

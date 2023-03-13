@@ -18,6 +18,8 @@ type ContentFeatures struct {
 	SupportRange    bool
 	// Play speeds, DLNA.ORG_PS would go here if supported.
 	Transcoded bool
+	// DLNA.ORG_FLAGS go here if you need to tweak.
+	Flags string
 }
 
 func BinaryInt(b bool) uint {
@@ -41,7 +43,13 @@ func (cf ContentFeatures) String() (ret string) {
 		BinaryInt(cf.SupportTimeSeek),
 		BinaryInt(cf.SupportRange),
 		BinaryInt(cf.Transcoded)))
-	params = append(params, "DLNA.ORG_FLAGS=01700000000000000000000000000000")
+	// https://stackoverflow.com/questions/29182754/c-dlna-generate-dlna-org-flags
+	// DLNA_ORG_FLAG_STREAMING_TRANSFER_MODE | DLNA_ORG_FLAG_BACKGROUND_TRANSFERT_MODE | DLNA_ORG_FLAG_CONNECTION_STALL | DLNA_ORG_FLAG_DLNA_V15
+	flags := "01700000000000000000000000000000"
+	if cf.Flags != "" {
+		flags = cf.Flags
+	}
+	params = append(params, "DLNA.ORG_FLAGS="+flags)
 	return strings.Join(params, ";")
 }
 
