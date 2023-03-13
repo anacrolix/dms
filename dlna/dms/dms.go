@@ -863,6 +863,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 				return
 			}
 			w.Header().Set("Content-Type", string(mimeType))
+			w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(path.Base(filePath)))
 			http.ServeFile(w, r, filePath)
 			return
 		}
