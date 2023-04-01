@@ -269,6 +269,9 @@ type Server struct {
 	// This feature is not enabled by default, since having write access to a shared media
 	// folder allows executing arbitrary commands in the context of the DLNA server.
 	AllowDynamicStreams bool
+	// pattern where to write transcode logs to. The [tsname] placeholder is replaced with the name
+	// of the item currently being played. The default is $HOME/.dms/log/[tsname]
+	TranscodeLogPattern string
 	Logger              log.Logger
 	eventingLogger      log.Logger
 }
@@ -425,7 +428,7 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 		return
 	}
 
-	var stderrPath string
+	var logTsName string
 	if !dynamicMode {
 		ffInfo, _ := me.ffmpegProbe(path_)
 		if ffInfo != nil {
@@ -436,23 +439,22 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 			}
 		}
 
-		stderrPath = func() string {
-			u, _ := user.Current()
-			return filepath.Join(u.HomeDir, ".dms", "log", tsname, filepath.Base(path_))
-		}()
+		logTsName = filepath.Join(tsname, filepath.Base(path_))
 	} else {
-		stderrPath = func() string {
-			u, _ := user.Current()
-			return filepath.Join(u.HomeDir, ".dms", "log", tsname)
-		}()
+		logTsName = tsname
 	}
-	os.MkdirAll(filepath.Dir(stderrPath), 0o750)
-	logFile, err := os.Create(stderrPath)
-	if err != nil {
-		log.Printf("couldn't create transcode log file: %s", err)
-	} else {
-		defer logFile.Close()
-		log.Printf("logging transcode to %q", stderrPath)
+	stderrPath:= strings.Replace(me.TranscodeLogPattern, "[tsname]", logTsName, -1)
+	var logFile io.Writer
+	if stderrPath != "" {
+		os.MkdirAll(filepath.Dir(stderrPath), 0o750)
+		aLogFile, err := os.Create(stderrPath)
+		if err != nil {
+			log.Printf("couldn't create transcode log file: %s", err)
+		} else {
+			defer aLogFile.Close()
+			log.Printf("logging transcode to %q", stderrPath)
+		}
+		logFile = aLogFile
 	}
 	p, err := ts.Transcode(path_, range_.Start, range_.End-range_.Start, logFile)
 	if err != nil {

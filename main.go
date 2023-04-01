@@ -47,6 +47,7 @@ type dmsConfig struct {
 	IgnoreUnreadable    bool
 	AllowedIpNets       []*net.IPNet
 	AllowDynamicStreams bool
+	TranscodeLogPattern string
 }
 
 func (config *dmsConfig) load(configPath string) {
@@ -130,6 +131,7 @@ func mainErr() error {
 	configFilePath := flag.String("config", "", "json configuration file")
 	allowedIps := flag.String("allowedIps", "", "allowed ip of clients, separated by comma")
 	forceTranscodeTo := flag.String("forceTranscodeTo", config.ForceTranscodeTo, "force transcoding to certain format, supported: 'chromecast', 'vp8', 'web'")
+	transcodeLogPattern := flag.String("transcodeLogPattern", "", "pattern where to write transcode logs to. The [tsname] placeholder is replaced with the name of the item currently being played. The default is $HOME/.dms/log/[tsname]")
 	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
 	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
 	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
@@ -155,6 +157,15 @@ func mainErr() error {
 	config.FFprobeCachePath = *fFprobeCachePath
 	config.AllowedIpNets = makeIpNets(*allowedIps)
 	config.ForceTranscodeTo = *forceTranscodeTo
+	config.TranscodeLogPattern = *transcodeLogPattern
+
+	if config.TranscodeLogPattern == "" {
+		u, err := user.Current()
+		if err != nil {
+			return fmt.Errorf("unable to resolve current user: %q", err)
+		}
+		config.TranscodeLogPattern = filepath.Join(u.HomeDir, ".dms", "log", "[tsname]")
+	}
 
 	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
 	logger.Printf("serving folder %q", config.Path)
@@ -210,6 +221,7 @@ func mainErr() error {
 		NoTranscode:         config.NoTranscode,
 		AllowDynamicStreams: config.AllowDynamicStreams,
 		ForceTranscodeTo:    config.ForceTranscodeTo,
+		TranscodeLogPattern: config.TranscodeLogPattern,
 		NoProbe:             config.NoProbe,
 		Icons: []dms.Icon{
 			{
