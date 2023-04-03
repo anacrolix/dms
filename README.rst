@@ -104,24 +104,24 @@ Usage of dms:
      - browse root path
    * - ``-stallEventSubscribe``
      - workaround for some bad event subscribers
+   * - ``-transcodeLogPattern``
+     - pattern where to write transcode logs to. The ``[tsname]`` placeholder is replaced with the name of the item currently being played. The default is ``$HOME/.dms/log/[tsname]``. You may turn off transcode logging entirely by setting it to ``/dev/null``. You may log to stderr by setting ``/dev/stderr``.
 
 Dynamic streams
 ===============
 DMS supports "dynamic streams" generated on the fly. This feature can be activated with the
-`-allowDynamicStreams` command line flag and can be configured by placing special metadata
+``-allowDynamicStreams`` command line flag and can be configured by placing special metadata
 files in your content directory.
-The name of these metadata files ends with `.dms.json`, their structure is [documented here](https://pkg.go.dev/github.com/anacrolix/dms/dlna/dms)
+The name of these metadata files ends with ``.dms.json``, their structure is `documented here <https://pkg.go.dev/github.com/anacrolix/dms/dlna/dms>`_.
 
-An example:
+An example::
 
-```
-{
-  "Title": "My awesome webcam",
-  "Resources": [
-     {
-        "MimeType": "video/webm",
-        "Command": "ffmpeg -i rtsp://10.6.8.161:554/Streaming/Channels/502/ -c:v copy -c:a copy -movflags +faststart+frag_keyframe+empty_moov -f matroska -"
-     }
-  ]
-}
-```
+    {
+      "Title": "My awesome webcam",
+      "Resources": [
+         {
+            "MimeType": "video/webm",
+            "Command": "ffmpeg -i rtsp://10.6.8.161:554/Streaming/Channels/502/ -c:v copy -c:a copy -movflags +faststart+frag_keyframe+empty_moov -f matroska -"
+         }
+      ]
+    }
