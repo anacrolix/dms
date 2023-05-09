@@ -59,6 +59,7 @@ Known Compatible Players and Renderers
  * Chromecast
  * VLC
  * LG Smart TVs, with varying success.
+ * Roku devices
 
 
 Usage of dms:
