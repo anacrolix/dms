@@ -1,3 +1,3 @@
 package version
 
-const DmsVersion = "1.4"
+const DmsVersion = "1.5"
