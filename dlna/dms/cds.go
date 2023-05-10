@@ -192,9 +192,11 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	}
 	if !mimeType.IsMedia() {
 		if isDmsMetadata {
-			me.Logger.Printf("%s ignored: enable support for dynamic streams via the -allowDynamicStreams command line flag", cdsObject.FilePath())
+			me.Logger.Levelf(
+				log.Debug,
+				"ignored %q: enable support for dynamic streams via the -allowDynamicStreams command line flag", cdsObject.FilePath())
 		} else {
-			me.Logger.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
+			me.Logger.Levelf(log.Debug, "ignored %q: non-media file (%s)", cdsObject.FilePath(), mimeType)
 		}
 		return
 	}
