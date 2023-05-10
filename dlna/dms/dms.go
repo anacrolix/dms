@@ -31,15 +31,19 @@ import (
 	"github.com/anacrolix/dms/transcode"
 	"github.com/anacrolix/dms/upnp"
 	"github.com/anacrolix/dms/upnpav"
-	"github.com/anacrolix/dms/version"
 	"github.com/anacrolix/ffprobe"
 )
+
+// This is used when communicating with other devices, such as over HTTP. I don't imagine we're
+// popular enough to have special treatment yet. This value would change if we made potentially
+// breaking changes to our behaviour that other devices might want to act on.
+const serverVersion = "1"
 
 var (
 	serverField = fmt.Sprintf(`Linux/3.4 DLNADOC/1.50 UPnP/1.0 %s/%s`,
 		userAgentProduct,
-		version.DmsVersion)
-	rootDeviceModelName = fmt.Sprintf("%s %s", userAgentProduct, version.DmsVersion)
+		serverVersion)
+	rootDeviceModelName = fmt.Sprintf("%s %s", userAgentProduct, serverVersion)
 )
 
 const (
@@ -443,7 +447,7 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 	} else {
 		logTsName = tsname
 	}
-	stderrPath:= strings.Replace(me.TranscodeLogPattern, "[tsname]", logTsName, -1)
+	stderrPath := strings.Replace(me.TranscodeLogPattern, "[tsname]", logTsName, -1)
 	var logFile io.Writer
 	if stderrPath != "" {
 		os.MkdirAll(filepath.Dir(stderrPath), 0o750)
