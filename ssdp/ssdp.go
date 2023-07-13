@@ -277,7 +277,8 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 			return
 		}
 		mx = uint(i)
-	} else {
+	}
+	if mx == 0 {
 		mx = 1
 	}
 	types := func(st string) []string {
