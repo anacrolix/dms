@@ -14,13 +14,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/anacrolix/ffprobe"
 	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/dlna"
 	"github.com/anacrolix/dms/misc"
 	"github.com/anacrolix/dms/upnp"
 	"github.com/anacrolix/dms/upnpav"
-	"github.com/anacrolix/ffprobe"
 )
 
 const dmsMetadataSuffix = ".dms.json"

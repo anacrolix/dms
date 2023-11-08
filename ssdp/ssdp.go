@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/anacrolix/log"
-
 	"golang.org/x/net/ipv4"
 )
 

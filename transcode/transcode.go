@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/anacrolix/ffprobe"
 	"github.com/anacrolix/log"
 
 	. "github.com/anacrolix/dms/misc"
-	"github.com/anacrolix/ffprobe"
 )
 
 // Invokes an external command and returns a reader from its stdout. The

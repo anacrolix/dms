@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anacrolix/ffprobe"
 	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/dlna"
@@ -31,7 +32,6 @@ import (
 	"github.com/anacrolix/dms/transcode"
 	"github.com/anacrolix/dms/upnp"
 	"github.com/anacrolix/dms/upnpav"
-	"github.com/anacrolix/ffprobe"
 )
 
 // This is used when communicating with other devices, such as over HTTP. I don't imagine we're
