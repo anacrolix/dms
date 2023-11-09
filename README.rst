@@ -1,3 +1,8 @@
+Funding
+=======
+
+dms is looking for funding for further development. See https://github.com/sponsors/anacrolix and the issues list if you have something specific in mind. Thank you for your support!
+
 dms
 ===
 
