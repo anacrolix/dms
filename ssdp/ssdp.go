@@ -316,6 +316,10 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	}() {
 		for _, type_ := range types {
 			resp := me.makeResponse(ip, type_, req)
+			//fix mx, if mx<=0 rand.Int63n will be panic
+			if mx <= 0 {
+				mx = 1
+			}
 			delay := time.Duration(rand.Int63n(int64(time.Second) * int64(mx)))
 			me.delayedSend(delay, resp, sender)
 		}
