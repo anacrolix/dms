@@ -22,6 +22,7 @@ const (
 	rootDevice = "upnp:rootdevice"
 	aliveNTS   = "ssdp:alive"
 	byebyeNTS  = "ssdp:byebye"
+	mxMax      = 10
 )
 
 var NetAddr *net.UDPAddr
@@ -267,7 +268,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	if req.Method != "M-SEARCH" || req.Header.Get("man") != `"ssdp:discover"` {
 		return
 	}
-	var mx uint
+	var mx int64
 	if req.Header.Get("Host") == AddrString {
 		mxHeader := req.Header.Get("mx")
 		i, err := strconv.ParseUint(mxHeader, 0, 0)
@@ -275,10 +276,14 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 			me.Logger.Printf("Invalid mx header %q: %s", mxHeader, err)
 			return
 		}
-		mx = uint(i)
+		mx = int64(i)
 	}
-	if mx == 0 {
+	// fix mx
+	if mx <= 0 {
 		mx = 1
+	}
+	if mx > mxMax {
+		mx = mxMax
 	}
 	types := func(st string) []string {
 		if st == "ssdp:all" {
@@ -316,7 +321,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	}() {
 		for _, type_ := range types {
 			resp := me.makeResponse(ip, type_, req)
-			delay := time.Duration(rand.Int63n(int64(time.Second) * int64(mx)))
+			delay := time.Duration(rand.Int63n(int64(time.Second) * mx))
 			me.delayedSend(delay, resp, sender)
 		}
 	}
