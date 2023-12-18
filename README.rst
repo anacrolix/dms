@@ -1,3 +1,8 @@
+Funding
+=======
+
+dms is looking for funding for further development. See https://github.com/sponsors/anacrolix and the issues list if you have something specific in mind. Thank you for your support!
+
 dms
 ===
 
@@ -59,6 +64,9 @@ Known Compatible Players and Renderers
  * Chromecast
  * VLC
  * LG Smart TVs, with varying success.
+ * Roku devices
+ * Apple TV 4K via VLC and 8player
+ * iOS VLC and 8player
 
 
 Usage of dms:

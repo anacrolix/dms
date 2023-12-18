@@ -14,13 +14,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/anacrolix/ffprobe"
 	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/dlna"
 	"github.com/anacrolix/dms/misc"
 	"github.com/anacrolix/dms/upnp"
 	"github.com/anacrolix/dms/upnpav"
-	"github.com/anacrolix/ffprobe"
 )
 
 const dmsMetadataSuffix = ".dms.json"
@@ -167,7 +167,11 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 
 // Turns the given entry and DMS host into a UPnP object. A nil object is
 // returned if the entry is not of interest.
-func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) (ret interface{}, err error) {
+func (me *contentDirectoryService) cdsObjectToUpnpavObject(
+	cdsObject object,
+	fileInfo os.FileInfo,
+	host, userAgent string,
+) (ret interface{}, err error) {
 	entryFilePath := cdsObject.FilePath()
 	ignored, err := me.IgnorePath(entryFilePath)
 	if err != nil {
@@ -189,7 +193,10 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	if fileInfo.IsDir() {
 		obj.Class = "object.container.storageFolder"
 		obj.Title = fileInfo.Name()
-		ret = upnpav.Container{Object: obj, ChildCount: me.objectChildCount(cdsObject)}
+		childCount := me.objectChildCount(cdsObject)
+		if childCount != 0 {
+			ret = upnpav.Container{Object: obj, ChildCount: childCount}
+		}
 		return
 	}
 	if !fileInfo.Mode().IsRegular() {
@@ -202,9 +209,11 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 	}
 	if !mimeType.IsMedia() {
 		if isDmsMetadata {
-			me.Logger.Printf("%s ignored: enable support for dynamic streams via the -allowDynamicStreams command line flag", cdsObject.FilePath())
+			me.Logger.Levelf(
+				log.Debug,
+				"ignored %q: enable support for dynamic streams via the -allowDynamicStreams command line flag", cdsObject.FilePath())
 		} else {
-			me.Logger.Printf("%s ignored: non-media file (%s)", cdsObject.FilePath(), mimeType)
+			me.Logger.Levelf(log.Debug, "ignored %q: non-media file (%s)", cdsObject.FilePath(), mimeType)
 		}
 		return
 	}
@@ -314,7 +323,10 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(cdsObject object, fil
 }
 
 // Returns all the upnpav objects in a directory.
-func (me *contentDirectoryService) readContainer(o object, host, userAgent string) (ret []interface{}, err error) {
+func (me *contentDirectoryService) readContainer(
+	o object,
+	host, userAgent string,
+) (ret []interface{}, err error) {
 	sfis := sortableFileInfoSlice{
 		// TODO(anacrolix): Dig up why this special cast was added.
 		FoldersLast: strings.Contains(userAgent, `AwoX/1.1`),
@@ -450,7 +462,11 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				{"UpdateID", me.updateIDString()},
 			}, nil
 		default:
-			return nil, upnp.Errorf(upnp.ArgumentValueInvalidErrorCode, "unhandled browse flag: %v", browse.BrowseFlag)
+			return nil, upnp.Errorf(
+				upnp.ArgumentValueInvalidErrorCode,
+				"unhandled browse flag: %v",
+				browse.BrowseFlag,
+			)
 		}
 	case "GetSearchCapabilities":
 		return [][2]string{

@@ -21,10 +21,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anacrolix/dms/dlna/dms"
-	"github.com/anacrolix/dms/rrcache"
 	"github.com/anacrolix/log"
 	"github.com/nfnt/resize"
+
+	"github.com/anacrolix/dms/dlna/dms"
+	"github.com/anacrolix/dms/rrcache"
 )
 
 //go:embed "data/VGC Sonic.png"
