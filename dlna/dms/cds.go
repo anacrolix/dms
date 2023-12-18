@@ -52,6 +52,8 @@ type dmsDynamicStreamResource struct {
 type dmsDynamicMediaItem struct {
 	// (optional) Title of this media item. Defaults to the filename, if omitted
 	Title string
+	// (optional) Type of media. Allowed values: "audio", "video". Defaults to video if omitted
+	Type string
 	// (optional) duration, e.g. 0:21:37.922
 	Duration string
 	// required: an array of available versions
@@ -96,7 +98,15 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 	// TODO(anacrolix): This might not be necessary due to item res image
 	// element.
 	obj.AlbumArtURI = iconURI
-	obj.Class = "object.item.videoItem"
+
+	switch dmsMediaItem.Type {
+		case "video":
+			obj.Class = "object.item.videoItem"
+		case "audio":
+			obj.Class = "object.item.audioItem"
+		default:
+			obj.Class = "object.item.videoItem"
+	}
 
 	obj.Title = dmsMediaItem.Title
 	if obj.Title == "" {
