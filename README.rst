@@ -133,3 +133,5 @@ An example::
          }
       ]
     }
+
+By default, dynamic content is treated as video. It is possible to specify a "Type" parameter with value "audio" or "video" to explicitly set this.

@@ -170,6 +170,9 @@ func mainErr() error {
 
 	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
 	logger.Printf("serving folder %q", config.Path)
+	if(config.AllowDynamicStreams) {
+		logger.Printf("Dynamic streams ARE allowed")
+	}
 
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
