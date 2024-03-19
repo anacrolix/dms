@@ -100,6 +100,8 @@ Usage of dms:
      - ignore hidden files and directories
    * - ``-ignoreUnreadable``
      - ignore unreadable files and directories
+   * - ``-ignore``
+     - ignore comma separated list of paths (i.e. -ignore thumbnails,thumbs)
    * - ``-logHeaders``
      - log HTTP headers
    * - ``-noProbe``

@@ -267,6 +267,8 @@ type Server struct {
 	IgnoreHidden bool
 	// Ingnore unreadable files and directories
 	IgnoreUnreadable bool
+	// Ingnore comma separated list of directories
+	IgnorePaths string
 	// White list of clients
 	AllowedIpNets []*net.IPNet
 	// Activate support for dynamic streams configured via .dms.json metadata files
@@ -1111,6 +1113,15 @@ func (server *Server) IgnorePath(path string) (bool, error) {
 			return true, nil
 		}
 	}
+
+	ignoreList := strings.Split(server.IgnorePaths, ",")
+	for _, element := range ignoreList {
+		if strings.Contains(path, fmt.Sprintf("/%s/", element)) {
+			log.Print(path, " ignored: in ignore list")
+			return true, nil
+		}
+	}
+
 	return false, nil
 }
 
