@@ -46,7 +46,7 @@ type dmsConfig struct {
 	NotifyInterval      time.Duration
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
-	IgnorePaths         string
+	IgnorePaths         []string
 	AllowedIpNets       []*net.IPNet
 	AllowDynamicStreams bool
 	TranscodeLogPattern string
@@ -160,7 +160,7 @@ func mainErr() error {
 	config.FFprobeCachePath = *fFprobeCachePath
 	config.AllowedIpNets = makeIpNets(*allowedIps)
 	config.ForceTranscodeTo = *forceTranscodeTo
-	config.IgnorePaths = *ignorePaths
+	config.IgnorePaths = strings.Split(*ignorePaths, ",")
 	config.TranscodeLogPattern = *transcodeLogPattern
 
 	if config.TranscodeLogPattern == "" {
