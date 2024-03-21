@@ -46,6 +46,7 @@ type dmsConfig struct {
 	NotifyInterval      time.Duration
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
+	IgnorePaths         []string
 	AllowedIpNets       []*net.IPNet
 	AllowDynamicStreams bool
 	TranscodeLogPattern string
@@ -139,6 +140,7 @@ func mainErr() error {
 	flag.DurationVar(&config.NotifyInterval, "notifyInterval", 30*time.Second, "interval between SSPD announces")
 	flag.BoolVar(&config.IgnoreHidden, "ignoreHidden", false, "ignore hidden files and directories")
 	flag.BoolVar(&config.IgnoreUnreadable, "ignoreUnreadable", false, "ignore unreadable files and directories")
+	ignorePaths := flag.String("ignore", "", "comma separated list of directories to ignore (i.e. thumbnails,thumbs)")
 	flag.BoolVar(&config.AllowDynamicStreams, "allowDynamicStreams", false, "activate support for dynamic streams described via .dms.json metadata files")
 
 	flag.Parse()
@@ -158,6 +160,7 @@ func mainErr() error {
 	config.FFprobeCachePath = *fFprobeCachePath
 	config.AllowedIpNets = makeIpNets(*allowedIps)
 	config.ForceTranscodeTo = *forceTranscodeTo
+	config.IgnorePaths = strings.Split(*ignorePaths, ",")
 	config.TranscodeLogPattern = *transcodeLogPattern
 
 	if config.TranscodeLogPattern == "" {
@@ -247,6 +250,7 @@ func mainErr() error {
 		NotifyInterval:      config.NotifyInterval,
 		IgnoreHidden:        config.IgnoreHidden,
 		IgnoreUnreadable:    config.IgnoreUnreadable,
+		IgnorePaths:         config.IgnorePaths,
 		AllowedIpNets:       config.AllowedIpNets,
 	}
 	if err := dmsServer.Init(); err != nil {
