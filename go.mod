@@ -6,8 +6,8 @@ require (
 	github.com/anacrolix/ffprobe v1.0.0
 	github.com/anacrolix/log v0.15.2
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
-	golang.org/x/net v0.0.0-20220524220425-1d687d428aca
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
+	golang.org/x/net v0.23.0
+	golang.org/x/sys v0.18.0
 )
 
 require (
