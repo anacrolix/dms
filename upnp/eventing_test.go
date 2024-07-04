@@ -40,3 +40,22 @@ func TestParseCallbackURLs(t *testing.T) {
 		t.Fatal(len(urls))
 	}
 }
+
+func TestSubscribeRace(t *testing.T) {
+	const n = 100
+
+	e := &Eventing{}
+	done := make(chan struct{})
+
+	doSubscribes := func() {
+		for i := 0; i < n; i++ {
+			e.Subscribe(nil, 10)
+		}
+		done <- struct{}{}
+	}
+
+	go doSubscribes()
+	go doSubscribes()
+	<-done
+	<-done
+}
