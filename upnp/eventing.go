@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/anacrolix/log"
@@ -47,10 +48,14 @@ type subscriber struct {
 // Intended to eventually be an embeddable implementation for managing
 // eventing for a service. Not complete.
 type Eventing struct {
+	mutex       sync.Mutex
 	subscribers map[string]*subscriber
 }
 
 func (me *Eventing) Subscribe(callback []*url.URL, timeoutSeconds int) (sid string, actualTimeout int, err error) {
+	me.mutex.Lock()
+	defer me.mutex.Unlock()
+
 	var uuid [16]byte
 	io.ReadFull(rand.Reader, uuid[:])
 	sid = FormatUUID(uuid[:])
