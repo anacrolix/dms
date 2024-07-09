@@ -171,14 +171,14 @@ func mainErr() error {
 		config.TranscodeLogPattern = filepath.Join(u.HomeDir, ".dms", "log", "[tsname]")
 	}
 
+	if len(*configFilePath) > 0 {
+		config.load(*configFilePath)
+	}
+
 	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
 	logger.Printf("serving folder %q", config.Path)
 	if(config.AllowDynamicStreams) {
 		logger.Printf("Dynamic streams ARE allowed")
-	}
-
-	if len(*configFilePath) > 0 {
-		config.load(*configFilePath)
 	}
 
 	cache := &fFprobeCache{
