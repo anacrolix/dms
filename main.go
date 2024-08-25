@@ -16,6 +16,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -37,6 +38,7 @@ type dmsConfig struct {
 	Http                string
 	FriendlyName        string
 	DeviceIcon          string
+	DeviceIconSizes     []string
 	LogHeaders          bool
 	FFprobeCachePath    string
 	NoTranscode         bool
@@ -74,6 +76,7 @@ var config = &dmsConfig{
 	Http:             ":1338",
 	FriendlyName:     "",
 	DeviceIcon:       "",
+	DeviceIconSizes:  []string{"48,128"},
 	LogHeaders:       false,
 	FFprobeCachePath: getDefaultFFprobeCachePath(),
 	ForceTranscodeTo: "",
@@ -128,6 +131,7 @@ func mainErr() error {
 	http := flag.String("http", config.Http, "http server port")
 	friendlyName := flag.String("friendlyName", config.FriendlyName, "server friendly name")
 	deviceIcon := flag.String("deviceIcon", config.DeviceIcon, "device defaultIcon")
+	deviceIconSizes := flag.String("deviceIconSizes", strings.Join(config.DeviceIconSizes, ","), "comma separated list of icon sizes to advertise, eg 48,128,256. Use 48:512,128:512 format to force actual size.")
 	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
@@ -156,6 +160,9 @@ func mainErr() error {
 	config.Http = *http
 	config.FriendlyName = *friendlyName
 	config.DeviceIcon = *deviceIcon
+	config.DeviceIconSizes = strings.Split(*deviceIconSizes, ",")
+	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
+
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
 	config.AllowedIpNets = makeIpNets(*allowedIps)
@@ -177,7 +184,7 @@ func mainErr() error {
 
 	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
 	logger.Printf("serving folder %q", config.Path)
-	if(config.AllowDynamicStreams) {
+	if config.AllowDynamicStreams {
 		logger.Printf("Dynamic streams ARE allowed")
 	}
 
@@ -230,22 +237,35 @@ func mainErr() error {
 		ForceTranscodeTo:    config.ForceTranscodeTo,
 		TranscodeLogPattern: config.TranscodeLogPattern,
 		NoProbe:             config.NoProbe,
-		Icons: []dms.Icon{
-			{
-				Width:    48,
-				Height:   48,
-				Depth:    8,
-				Mimetype: "image/png",
-				Bytes:    readIcon(config.DeviceIcon, 48),
-			},
-			{
-				Width:    128,
-				Height:   128,
-				Depth:    8,
-				Mimetype: "image/png",
-				Bytes:    readIcon(config.DeviceIcon, 128),
-			},
-		},
+		Icons: func() []dms.Icon {
+			var icons []dms.Icon
+			for _, size := range config.DeviceIconSizes {
+				s := strings.Split(size, ":")
+				if len(s) != 1 && len(s) != 2 {
+					log.Fatal("bad device icon size: ", size)
+				}
+				advertisedSize, err := strconv.Atoi(s[0])
+				if err != nil {
+					log.Fatal("bad device icon size: ", size)
+				}
+				actualSize := advertisedSize
+				if len(s) == 2 {
+					// Force actual icon size to be different from advertised
+					actualSize, err = strconv.Atoi(s[1])
+					if err != nil {
+						log.Fatal("bad device icon size: ", size)
+					}
+				}
+				icons = append(icons, dms.Icon{
+					Width:    advertisedSize,
+					Height:   advertisedSize,
+					Depth:    8,
+					Mimetype: "image/png",
+					Bytes:    readIcon(config.DeviceIcon, uint(actualSize)),
+				})
+			}
+			return icons
+		}(),
 		StallEventSubscribe: config.StallEventSubscribe,
 		NotifyInterval:      config.NotifyInterval,
 		IgnoreHidden:        config.IgnoreHidden,
