@@ -161,7 +161,6 @@ func mainErr() error {
 	config.FriendlyName = *friendlyName
 	config.DeviceIcon = *deviceIcon
 	config.DeviceIconSizes = strings.Split(*deviceIconSizes, ",")
-	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
 
 	config.LogHeaders = *logHeaders
 	config.FFprobeCachePath = *fFprobeCachePath
@@ -182,6 +181,7 @@ func mainErr() error {
 		config.load(*configFilePath)
 	}
 
+	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
 	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
 	logger.Printf("serving folder %q", config.Path)
 	if config.AllowDynamicStreams {
