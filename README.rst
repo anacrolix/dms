@@ -88,6 +88,8 @@ Usage of dms:
      - json configuration file
    * - ``-deviceIcon string``
      - device icon
+   * - ``-deviceIconSizes string``
+     - device icon sizes, separated by comma
    * - ``-fFprobeCachePath string``
      - path to FFprobe cache file (default "/home/efreak/.dms-ffprobe-cache")
    * - ``-forceTranscodeTo string``
@@ -118,6 +120,16 @@ Usage of dms:
      - workaround for some bad event subscribers
    * - ``-transcodeLogPattern``
      - pattern where to write transcode logs to. The ``[tsname]`` placeholder is replaced with the name of the item currently being played. The default is ``$HOME/.dms/log/[tsname]``. You may turn off transcode logging entirely by setting it to ``/dev/null``. You may log to stderr by setting ``/dev/stderr``.
+
+An example json configuration file::
+
+    {
+      "path": "/path/to/media/files",
+      "friendlyName": "dms",
+      "noTranscode": true,
+      "deviceIcon": "/path/to/icon.png",
+      "deviceIconSizes": ["48:512","128:512"]
+    }
 
 Dynamic streams
 ===============
