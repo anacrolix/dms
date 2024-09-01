@@ -112,6 +112,7 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 	if obj.Title == "" {
 		obj.Title = strings.TrimSuffix(fileInfo.Name(), dmsMetadataSuffix)
 	}
+	obj.Date = upnpav.Timestamp{Time: fileInfo.ModTime()}
 
 	item := upnpav.Item{
 		Object: obj,
