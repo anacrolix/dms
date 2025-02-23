@@ -135,6 +135,7 @@ func mainErr() error {
 	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
 	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
 	configFilePath := flag.String("config", "", "json configuration file")
+	generateConfig := flag.Bool("generateConfig", false, "dump the current configuration to json in the stdout and exit")
 	allowedIps := flag.String("allowedIps", "", "allowed ip of clients, separated by comma")
 	forceTranscodeTo := flag.String("forceTranscodeTo", config.ForceTranscodeTo, "force transcoding to certain format, supported: 'chromecast', 'vp8', 'web'")
 	transcodeLogPattern := flag.String("transcodeLogPattern", "", "pattern where to write transcode logs to. The [tsname] placeholder is replaced with the name of the item currently being played. The default is $HOME/.dms/log/[tsname]")
@@ -179,6 +180,15 @@ func mainErr() error {
 
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
+	}
+
+	if *generateConfig {
+		jsonData, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(string(jsonData))
+		os.Exit(0)
 	}
 
 	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
