@@ -27,6 +27,7 @@ import (
 
 	"github.com/anacrolix/dms/dlna/dms"
 	"github.com/anacrolix/dms/rrcache"
+	"github.com/anacrolix/dms/webadmin"
 )
 
 //go:embed "data/VGC Sonic.png"
@@ -50,6 +51,7 @@ type dmsConfig struct {
 	IgnoreUnreadable    bool
 	IgnorePaths         []string
 	AllowedIpNets       []*net.IPNet
+	BlacklistedIpNets   []*net.IPNet
 	AllowDynamicStreams bool
 	TranscodeLogPattern string
 }
@@ -116,192 +118,6 @@ func (fc *fFprobeCache) Set(key interface{}, value interface{}) {
 		size += int64(len(b))
 	}
 	fc.c.Set(key, value, size)
-}
-
-func main() {
-	err := mainErr()
-	if err != nil {
-		log.Fatalf("error in main: %v", err)
-	}
-}
-
-func mainErr() error {
-	path := flag.String("path", config.Path, "browse root path")
-	ifName := flag.String("ifname", config.IfName, "specific SSDP network interface")
-	http := flag.String("http", config.Http, "http server port")
-	friendlyName := flag.String("friendlyName", config.FriendlyName, "server friendly name")
-	deviceIcon := flag.String("deviceIcon", config.DeviceIcon, "device defaultIcon")
-	deviceIconSizes := flag.String("deviceIconSizes", strings.Join(config.DeviceIconSizes, ","), "comma separated list of icon sizes to advertise, eg 48,128,256. Use 48:512,128:512 format to force actual size.")
-	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
-	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
-	configFilePath := flag.String("config", "", "json configuration file")
-	generateConfig := flag.Bool("generateConfig", false, "dump the current configuration to json in the stdout and exit")
-	allowedIps := flag.String("allowedIps", "", "allowed ip of clients, separated by comma")
-	forceTranscodeTo := flag.String("forceTranscodeTo", config.ForceTranscodeTo, "force transcoding to certain format, supported: 'chromecast', 'vp8', 'web'")
-	transcodeLogPattern := flag.String("transcodeLogPattern", "", "pattern where to write transcode logs to. The [tsname] placeholder is replaced with the name of the item currently being played. The default is $HOME/.dms/log/[tsname]")
-	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
-	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
-	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
-	flag.DurationVar(&config.NotifyInterval, "notifyInterval", 30*time.Second, "interval between SSPD announces")
-	flag.BoolVar(&config.IgnoreHidden, "ignoreHidden", false, "ignore hidden files and directories")
-	flag.BoolVar(&config.IgnoreUnreadable, "ignoreUnreadable", false, "ignore unreadable files and directories")
-	ignorePaths := flag.String("ignore", "", "comma separated list of directories to ignore (i.e. thumbnails,thumbs)")
-	flag.BoolVar(&config.AllowDynamicStreams, "allowDynamicStreams", false, "activate support for dynamic streams described via .dms.json metadata files")
-
-	flag.Parse()
-	if flag.NArg() != 0 {
-		flag.Usage()
-		return fmt.Errorf("%s: %s\n", "unexpected positional arguments", flag.Args())
-	}
-
-	logger := log.Default.WithNames("main")
-
-	config.Path, _ = filepath.Abs(*path)
-	config.IfName = *ifName
-	config.Http = *http
-	config.FriendlyName = *friendlyName
-	config.DeviceIcon = *deviceIcon
-	config.DeviceIconSizes = strings.Split(*deviceIconSizes, ",")
-
-	config.LogHeaders = *logHeaders
-	config.FFprobeCachePath = *fFprobeCachePath
-	config.AllowedIpNets = makeIpNets(*allowedIps)
-	config.ForceTranscodeTo = *forceTranscodeTo
-	config.IgnorePaths = strings.Split(*ignorePaths, ",")
-	config.TranscodeLogPattern = *transcodeLogPattern
-
-	if config.TranscodeLogPattern == "" {
-		u, err := user.Current()
-		if err != nil {
-			return fmt.Errorf("unable to resolve current user: %q", err)
-		}
-		config.TranscodeLogPattern = filepath.Join(u.HomeDir, ".dms", "log", "[tsname]")
-	}
-
-	if len(*configFilePath) > 0 {
-		config.load(*configFilePath)
-	}
-
-	if *generateConfig {
-		jsonData, err := json.MarshalIndent(config, "", "  ")
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(string(jsonData))
-		os.Exit(0)
-	}
-
-	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
-	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
-	logger.Printf("serving folder %q", config.Path)
-	if config.AllowDynamicStreams {
-		logger.Printf("Dynamic streams ARE allowed")
-	}
-
-	cache := &fFprobeCache{
-		c: rrcache.New(64 << 20),
-	}
-	if err := cache.load(config.FFprobeCachePath); err != nil {
-		log.Print(err)
-	}
-
-	dmsServer := &dms.Server{
-		Logger: logger.WithNames("dms", "server"),
-		Interfaces: func(ifName string) (ifs []net.Interface) {
-			var err error
-			if ifName == "" {
-				ifs, err = net.Interfaces()
-			} else {
-				var if_ *net.Interface
-				if_, err = net.InterfaceByName(ifName)
-				if if_ != nil {
-					ifs = append(ifs, *if_)
-				}
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
-			var tmp []net.Interface
-			for _, if_ := range ifs {
-				if if_.Flags&net.FlagUp == 0 || if_.MTU <= 0 {
-					continue
-				}
-				tmp = append(tmp, if_)
-			}
-			ifs = tmp
-			return
-		}(config.IfName),
-		HTTPConn: func() net.Listener {
-			conn, err := net.Listen("tcp", config.Http)
-			if err != nil {
-				log.Fatal(err)
-			}
-			return conn
-		}(),
-		FriendlyName:        config.FriendlyName,
-		RootObjectPath:      filepath.Clean(config.Path),
-		FFProbeCache:        cache,
-		LogHeaders:          config.LogHeaders,
-		NoTranscode:         config.NoTranscode,
-		AllowDynamicStreams: config.AllowDynamicStreams,
-		ForceTranscodeTo:    config.ForceTranscodeTo,
-		TranscodeLogPattern: config.TranscodeLogPattern,
-		NoProbe:             config.NoProbe,
-		Icons: func() []dms.Icon {
-			var icons []dms.Icon
-			for _, size := range config.DeviceIconSizes {
-				s := strings.Split(size, ":")
-				if len(s) != 1 && len(s) != 2 {
-					log.Fatal("bad device icon size: ", size)
-				}
-				advertisedSize, err := strconv.Atoi(s[0])
-				if err != nil {
-					log.Fatal("bad device icon size: ", size)
-				}
-				actualSize := advertisedSize
-				if len(s) == 2 {
-					// Force actual icon size to be different from advertised
-					actualSize, err = strconv.Atoi(s[1])
-					if err != nil {
-						log.Fatal("bad device icon size: ", size)
-					}
-				}
-				icons = append(icons, dms.Icon{
-					Width:    advertisedSize,
-					Height:   advertisedSize,
-					Depth:    8,
-					Mimetype: "image/png",
-					Bytes:    readIcon(config.DeviceIcon, uint(actualSize)),
-				})
-			}
-			return icons
-		}(),
-		StallEventSubscribe: config.StallEventSubscribe,
-		NotifyInterval:      config.NotifyInterval,
-		IgnoreHidden:        config.IgnoreHidden,
-		IgnoreUnreadable:    config.IgnoreUnreadable,
-		IgnorePaths:         config.IgnorePaths,
-		AllowedIpNets:       config.AllowedIpNets,
-	}
-	if err := dmsServer.Init(); err != nil {
-		log.Fatalf("error initing dms server: %v", err)
-	}
-	go func() {
-		if err := dmsServer.Run(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
-	<-sigs
-	err := dmsServer.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cache.save(config.FFprobeCachePath); err != nil {
-		log.Print(err)
-	}
-	return nil
 }
 
 func (cache *fFprobeCache) load(path string) error {
@@ -412,4 +228,212 @@ func makeIpNets(s string) []*net.IPNet {
 		}
 	}
 	return nets
+}
+
+func main() {
+	err := mainErr()
+	if err != nil {
+		log.Fatalf("error in main: %v", err)
+	}
+}
+
+func mainErr() error {
+	path := flag.String("path", config.Path, "browse root path")
+	ifName := flag.String("ifname", config.IfName, "specific SSDP network interface")
+	http := flag.String("http", config.Http, "http server port")
+	friendlyName := flag.String("friendlyName", config.FriendlyName, "server friendly name")
+	deviceIcon := flag.String("deviceIcon", config.DeviceIcon, "device defaultIcon")
+	deviceIconSizes := flag.String("deviceIconSizes", strings.Join(config.DeviceIconSizes, ","), "comma separated list of icon sizes to advertise, eg 48,128,256. Use 48:512,128:512 format to force actual size.")
+	logHeaders := flag.Bool("logHeaders", config.LogHeaders, "log HTTP headers")
+	fFprobeCachePath := flag.String("fFprobeCachePath", config.FFprobeCachePath, "path to FFprobe cache file")
+	configFilePath := flag.String("config", "", "json configuration file")
+	generateConfig := flag.Bool("generateConfig", false, "dump the current configuration to json in the stdout and exit")
+	allowedIps := flag.String("allowedIps", "", "allowed ip of clients, separated by comma")
+	blacklistedIps := flag.String("blacklistedIps", "", "blocked ip of clients, separated by comma")
+	forceTranscodeTo := flag.String("forceTranscodeTo", config.ForceTranscodeTo, "force transcoding to certain format, supported: 'chromecast', 'vp8', 'web'")
+	transcodeLogPattern := flag.String("transcodeLogPattern", "", "pattern where to write transcode logs to. The [tsname] placeholder is replaced with the name of the item currently being played. The default is $HOME/.dms/log/[tsname]")
+	flag.BoolVar(&config.NoTranscode, "noTranscode", false, "disable transcoding")
+	flag.BoolVar(&config.NoProbe, "noProbe", false, "disable media probing with ffprobe")
+	flag.BoolVar(&config.StallEventSubscribe, "stallEventSubscribe", false, "workaround for some bad event subscribers")
+	flag.DurationVar(&config.NotifyInterval, "notifyInterval", 30*time.Second, "interval between SSPD announces")
+	flag.BoolVar(&config.IgnoreHidden, "ignoreHidden", false, "ignore hidden files and directories")
+	flag.BoolVar(&config.IgnoreUnreadable, "ignoreUnreadable", false, "ignore unreadable files and directories")
+	ignorePaths := flag.String("ignore", "", "comma separated list of directories to ignore (i.e. thumbnails,thumbs)")
+	flag.BoolVar(&config.AllowDynamicStreams, "allowDynamicStreams", false, "activate support for dynamic streams described via .dms.json metadata files")
+
+	flag.Parse()
+	if flag.NArg() != 0 {
+		flag.Usage()
+		return fmt.Errorf("%s: %s\n", "unexpected positional arguments", flag.Args())
+	}
+
+	logger := log.Default.WithNames("main")
+
+	config.Path, _ = filepath.Abs(*path)
+	config.IfName = *ifName
+	config.Http = *http
+	config.FriendlyName = *friendlyName
+	config.DeviceIcon = *deviceIcon
+	config.DeviceIconSizes = strings.Split(*deviceIconSizes, ",")
+
+	config.LogHeaders = *logHeaders
+	config.FFprobeCachePath = *fFprobeCachePath
+	config.AllowedIpNets = makeIpNets(*allowedIps)
+	config.ForceTranscodeTo = *forceTranscodeTo
+	config.IgnorePaths = strings.Split(*ignorePaths, ",")
+	config.TranscodeLogPattern = *transcodeLogPattern
+
+	if len(*blacklistedIps) > 0 {
+		config.BlacklistedIpNets = makeIpNets(*blacklistedIps) // that function is made for whitelist, if it's empty it will put the 0.0.0.0
+	} else {
+		config.BlacklistedIpNets = make([]*net.IPNet, 0)
+	}
+
+	if config.TranscodeLogPattern == "" {
+		u, err := user.Current()
+		if err != nil {
+			return fmt.Errorf("unable to resolve current user: %q", err)
+		}
+		config.TranscodeLogPattern = filepath.Join(u.HomeDir, ".dms", "log", "[tsname]")
+	}
+
+	if len(*configFilePath) > 0 {
+		config.load(*configFilePath)
+	}
+
+	if *generateConfig {
+		jsonData, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(string(jsonData))
+		os.Exit(0)
+	}
+
+	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
+	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
+	logger.Printf("blacklisted nets are %q", config.BlacklistedIpNets)
+	logger.Printf("serving folder %q", config.Path)
+	if config.AllowDynamicStreams {
+		logger.Printf("Dynamic streams ARE allowed")
+	}
+
+	cache := &fFprobeCache{
+		c: rrcache.New(64 << 20),
+	}
+	if err := cache.load(config.FFprobeCachePath); err != nil {
+		log.Print(err)
+	}
+
+	var interfaces = func(ifName string) (ifs []net.Interface) {
+		var err error
+		if ifName == "" {
+			ifs, err = net.Interfaces()
+		} else {
+			var if_ *net.Interface
+			if_, err = net.InterfaceByName(ifName)
+			if if_ != nil {
+				ifs = append(ifs, *if_)
+			}
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		var tmp []net.Interface
+		for _, if_ := range ifs {
+			if if_.Flags&net.FlagUp == 0 || if_.MTU <= 0 {
+				continue
+			}
+			tmp = append(tmp, if_)
+		}
+		ifs = tmp
+		return
+	}(config.IfName)
+
+	var httpconn = func() net.Listener {
+		conn, err := net.Listen("tcp", config.Http)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return conn
+	}()
+
+	var icons = func() []dms.Icon {
+		var icons []dms.Icon
+		for _, size := range config.DeviceIconSizes {
+			s := strings.Split(size, ":")
+			if len(s) != 1 && len(s) != 2 {
+				log.Fatal("bad device icon size: ", size)
+			}
+			advertisedSize, err := strconv.Atoi(s[0])
+			if err != nil {
+				log.Fatal("bad device icon size: ", size)
+			}
+			actualSize := advertisedSize
+			if len(s) == 2 {
+				// Force actual icon size to be different from advertised
+				actualSize, err = strconv.Atoi(s[1])
+				if err != nil {
+					log.Fatal("bad device icon size: ", size)
+				}
+			}
+			icons = append(icons, dms.Icon{
+				Width:    advertisedSize,
+				Height:   advertisedSize,
+				Depth:    8,
+				Mimetype: "image/png",
+				Bytes:    readIcon(config.DeviceIcon, uint(actualSize)),
+			})
+		}
+		return icons
+	}()
+
+	dmsServer := &dms.Server{
+		Logger:              logger.WithNames("dms", "server"),
+		Interfaces:          interfaces,
+		HTTPConn:            httpconn,
+		FriendlyName:        config.FriendlyName,
+		RootObjectPath:      filepath.Clean(config.Path),
+		FFProbeCache:        cache,
+		LogHeaders:          config.LogHeaders,
+		NoTranscode:         config.NoTranscode,
+		AllowDynamicStreams: config.AllowDynamicStreams,
+		ForceTranscodeTo:    config.ForceTranscodeTo,
+		TranscodeLogPattern: config.TranscodeLogPattern,
+		NoProbe:             config.NoProbe,
+		Icons:               icons,
+		StallEventSubscribe: config.StallEventSubscribe,
+		NotifyInterval:      config.NotifyInterval,
+		IgnoreHidden:        config.IgnoreHidden,
+		IgnoreUnreadable:    config.IgnoreUnreadable,
+		IgnorePaths:         config.IgnorePaths,
+		AllowedIpNets:       config.AllowedIpNets,
+		BlacklistedIpNets:   config.BlacklistedIpNets,
+		RefusedClients:      make(map[string]bool),
+		AllowedClients:      make(map[string]string),
+	}
+
+	if err := dmsServer.Init(); err != nil {
+		log.Fatalf("error initing dms server: %v", err)
+	}
+	go func() {
+		if err := dmsServer.Run(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	go func() {
+		webadmin.WebadminStartAsync(dmsServer)
+	}()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+	<-sigs
+	err := dmsServer.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cache.save(config.FFprobeCachePath); err != nil {
+		log.Print(err)
+	}
+	return nil
 }

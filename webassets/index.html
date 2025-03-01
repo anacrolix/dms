@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <title>Dms web interface</title>
+  <script>
+    var server_status = {}
+
+    function fetchData() {
+      return {
+        items: {},
+        loading: true,
+        async fetchData() {
+          try {
+            const response = await fetch('/status');
+            const data = await response.json();
+            this.items = data;
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          } finally {
+            this.loading = false;
+          }
+        },
+        init() {
+          this.fetchData();
+        }
+      };
+    };
+
+    async function remove_blacklist(ip_addr) {
+      try {
+        const response = await fetch('/blacklist/' + ip_addr, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        alert(JSON.stringify(data));
+        location.reload();
+        // Handle the response data here
+      } catch (error) {
+        alert(JSON.stringify(data));
+        console.error('Error:', error);
+      }
+    }
+
+    async function remove_whitelist(ip_addr) {
+      try {
+        const response = await fetch('/whitelist/' + ip_addr, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        alert(JSON.stringify(data));
+        location.reload();
+        // Handle the response data here
+      } catch (error) {
+        alert(JSON.stringify(data));
+        console.error('Error:', error);
+      }
+    }
+
+    async function block(ip_addr) {
+      try {
+        const response = await fetch('/blacklist/' + ip_addr, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        alert(JSON.stringify(data));
+        location.reload();
+        // Handle the response data here
+      } catch (error) {
+        alert(JSON.stringify(data));
+        console.error('Error:', error);
+      }
+    }
+
+    async function unblock(ip_addr) {
+      try {
+        const response = await fetch('/whitelist/' + ip_addr, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        alert(JSON.stringify(data));
+        location.reload();
+        // Handle the response data here
+      } catch (error) {
+        alert(JSON.stringify(data));
+        console.error('Error:', error);
+      }
+    }
+  </script>
+</head>
+
+<body style="background-color: AliceBlue;">
+  <main class="container">
+    <h1>Dms web interface</h1>
+    <small>A basic interface for dms administration</small><br>
+    <p>This minimal interface provides function for blocking and unblocking clients. The changes are not saved to the
+      configuration.</p>
+
+    <h2>Blacklist</h2>
+    <p>Blacklist has priority over whitelist</p>
+
+    <div x-data="fetchData()" id="blacklistcontainer">
+      <!-- Display a loading message while fetching data -->
+      <div x-show="loading">Loading...</div>
+
+      <!-- Use x-for to loop over the fetched data -->
+      <div x-show="!loading" style="vertical-align: middle;">
+        <div class="grid">
+          <div><strong>Ip address</strong></div>
+          <div><strong>Mask</strong></div>
+          <div><strong>Action</strong></div>
+        </div>
+        <hr>
+
+        <template x-for="item in items['blacklist']">
+          <article>
+            <div class="grid">
+              <div x-text="item.IP"></div>
+              <div><code x-text="item.Mask"></code></div>
+              <div><button x-on:click="remove_blacklist(item.IP)">Remove item</div>
+            </div>
+          </article>
+        </template>
+      </div>
+    </div><!-- /blacklistcontainer -->
+
+    <h2>Whitelist</h2>
+    <div x-data="fetchData()" id="whitelistcontainer">
+      <!-- Display a loading message while fetching data -->
+      <div x-show="loading">Loading...</div>
+
+      <!-- Use x-for to loop over the fetched data -->
+      <div x-show="!loading" style="vertical-align: middle;">
+        <div class="grid">
+          <div><strong>Ip address</strong></div>
+          <div><strong>Mask</strong></div>
+          <div style=><strong>Action</strong></div>
+        </div>
+        <hr>
+
+        <template x-for="item in items['whitelist']">
+          <article>
+            <div class="grid">
+              <div x-text="item.IP"></div>
+              <div><code x-text="item.Mask"></code></div>
+              <div><button x-on:click="remove_whitelist(item.IP)">Remove item</div>
+            </div>
+          </article>
+        </template>
+      </div>
+    </div><!-- /whitelistcontainer -->
+
+    <h2>Connected clients</h2>
+    <div x-data="fetchData()">
+      <!-- Display a loading message while fetching data -->
+      <div x-show="loading">Loading...</div>
+
+      <!-- Use x-for to loop over the fetched data -->
+      <div x-show="!loading" style="vertical-align: middle;">
+        <div class="grid">
+          <div><strong>Ip address</strong></div>
+          <div style=><strong>Action</strong></div>
+          <div><strong>Last browsed file</strong></div>
+        </div>
+        <hr>
+
+        <template x-for="(value, index) in items['allowed']">
+          <article>
+            <div class="grid">
+              <div x-text="index"></div>
+              <div><button x-on:click="block(index)">Block</button></div>
+              <div><code x-text="value"></code></div>
+            </div>
+          </article>
+        </template>
+      </div>
+    </div>
+
+    <h2>Refused clients</h2>
+    <div x-data="fetchData()">
+      <!-- Display a loading message while fetching data -->
+      <div x-show="loading">Loading...</div>
+
+      <!-- Use x-for to loop over the fetched data -->
+      <div x-show="!loading" style="vertical-align: middle;">
+        <article>
+          <template x-for="(value, index) in items['refused']">
+            <div><button x-on:click="unblock(index)" x-text="index"></button></div>
+          </template>
+        </article>
+      </div>
+    </div>
+  </main>
+</body>
+
+</html>

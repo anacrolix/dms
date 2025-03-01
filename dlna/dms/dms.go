@@ -270,7 +270,8 @@ type Server struct {
 	// Ignore comma separated list of directories
 	IgnorePaths []string
 	// White list of clients
-	AllowedIpNets []*net.IPNet
+	AllowedIpNets     []*net.IPNet
+	BlacklistedIpNets []*net.IPNet
 	// Activate support for dynamic streams configured via .dms.json metadata files
 	// This feature is not enabled by default, since having write access to a shared media
 	// folder allows executing arbitrary commands in the context of the DLNA server.
@@ -280,6 +281,9 @@ type Server struct {
 	TranscodeLogPattern string
 	Logger              log.Logger
 	eventingLogger      log.Logger
+	RefusedClients      map[string]bool
+	AllowedClients      map[string]string
+	AdminPassword       string
 }
 
 // UPnP SOAP service.
@@ -586,6 +590,25 @@ func (me *Server) soapActionResponse(sa upnp.SoapAction, actionRequestXML []byte
 	return service.Handle(sa.Action, actionRequestXML, r)
 }
 
+func isIpAllowed(ip net.IP, white []*net.IPNet, black []*net.IPNet) bool {
+	good := false
+
+	for _, ipnet := range white {
+		if ipnet.Contains(ip) {
+			good = true
+			break
+		}
+	}
+
+	for _, ipnet := range black {
+		if ipnet.Contains(ip) {
+			return false
+		}
+	}
+
+	return good
+}
+
 // Handle a service control HTTP request.
 func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) {
 	found := false
@@ -594,15 +617,20 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 		// IPv6 addresses may have the form address%zone (e.g. ::1%eth0)
 		clientIp = clientIp[:zoneDelimiterIdx]
 	}
-	for _, ipnet := range me.AllowedIpNets {
-		if ipnet.Contains(net.ParseIP(clientIp)) {
-			found = true
-		}
-	}
+
+	found = isIpAllowed(net.ParseIP(clientIp), me.AllowedIpNets, me.BlacklistedIpNets)
+
 	if !found {
 		log.Printf("not allowed client %s, %+v", clientIp, me.AllowedIpNets)
 		http.Error(w, "forbidden", http.StatusForbidden)
+		me.RefusedClients[clientIp] = true
+		delete(me.AllowedClients, clientIp)
 		return
+	} else {
+		if _, ok := me.AllowedClients[clientIp]; ok {
+			me.AllowedClients[clientIp] = ""
+		}
+		delete(me.RefusedClients, clientIp)
 	}
 	soapActionString := r.Header.Get("SOAPACTION")
 	soapAction, err := upnp.ParseActionHTTPHeader(soapActionString)
@@ -839,6 +867,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 	mux.HandleFunc(subtitlePath, server.serveSubtitle)
 	mux.HandleFunc(resPath, func(w http.ResponseWriter, r *http.Request) {
 		filePath := server.filePath(r.URL.Query().Get("path"))
+		fmt.Println("Serving " + r.URL.Query().Get("path"))
 		if ignored, err := server.IgnorePath(filePath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -873,6 +902,8 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			w.Header().Set("Content-Type", string(mimeType))
 			w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(path.Base(filePath)))
 			http.ServeFile(w, r, filePath)
+			var ip = strings.Split(r.RemoteAddr, ":")[0]
+			server.AllowedClients[ip] = r.URL.RequestURI()
 			return
 		}
 		if server.NoTranscode {
@@ -885,6 +916,8 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			return
 		}
 		server.serveDLNATranscode(w, r, filePath, spec, k, false)
+		var ip = strings.Split(r.RemoteAddr, ":")[0]
+		server.AllowedClients[ip] = r.URL.RequestURI()
 	})
 	mux.HandleFunc(rootDescPath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", `text/xml; charset="utf-8"`)
