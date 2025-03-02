@@ -9,6 +9,13 @@
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <title>Dms web interface</title>
+  <style>
+    .buttonremoveaction {
+      background-color: orange;
+      border-color: orangered;
+      color: midnightblue;
+    }
+  </style>
   <script>
     var server_status = {}
 
@@ -34,6 +41,10 @@
     };
 
     async function remove_blacklist(ip_addr) {
+
+      if (!confirm('Are you sure you want to remove ' + ip_addr + " from the blacklist?"))
+        return;
+
       try {
         const response = await fetch('/blacklist/' + ip_addr, {
           method: 'DELETE',
@@ -52,6 +63,9 @@
     }
 
     async function remove_whitelist(ip_addr) {
+      if (!confirm('Are you sure you want to add ' + ip_addr + " to the whitelist?"))
+        return;
+
       try {
         const response = await fetch('/whitelist/' + ip_addr, {
           method: 'DELETE',
@@ -70,6 +84,9 @@
     }
 
     async function block(ip_addr) {
+      if (!confirm('Are you sure you want to block ' + ip_addr + " ?"))
+        return;
+
       try {
         const response = await fetch('/blacklist/' + ip_addr, {
           method: 'PUT',
@@ -88,6 +105,9 @@
     }
 
     async function unblock(ip_addr) {
+      if (!confirm('Are you sure you want to unblock ' + ip_addr + " ?"))
+        return;
+
       try {
         const response = await fetch('/whitelist/' + ip_addr, {
           method: 'PUT',
@@ -135,10 +155,11 @@
             <div class="grid">
               <div x-text="item.IP"></div>
               <div><code x-text="item.Mask"></code></div>
-              <div><button x-on:click="remove_blacklist(item.IP)">Remove item</div>
+              <div><button x-on:click="remove_blacklist(item.IP)" class="buttonremoveaction">Remove item</button></div>
             </div>
           </article>
         </template>
+        <button>Add to blacklist</button>
       </div>
     </div><!-- /blacklistcontainer -->
 
@@ -152,7 +173,7 @@
         <div class="grid">
           <div><strong>Ip address</strong></div>
           <div><strong>Mask</strong></div>
-          <div style=><strong>Action</strong></div>
+          <div><strong>Action</strong></div>
         </div>
         <hr>
 
@@ -161,10 +182,11 @@
             <div class="grid">
               <div x-text="item.IP"></div>
               <div><code x-text="item.Mask"></code></div>
-              <div><button x-on:click="remove_whitelist(item.IP)">Remove item</div>
+              <div><button x-on:click="remove_whitelist(item.IP)" class="buttonremoveaction">Remove item</button></div>
             </div>
           </article>
         </template>
+        <button>Add to whitelist</button>
       </div>
     </div><!-- /whitelistcontainer -->
 
@@ -186,7 +208,7 @@
           <article>
             <div class="grid">
               <div x-text="index"></div>
-              <div><button x-on:click="block(index)">Block</button></div>
+              <div><button x-on:click="block(index)" class="buttonremoveaction">Block</button></div>
               <div><code x-text="value"></code></div>
             </div>
           </article>
