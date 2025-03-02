@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <title>Dms web interface</title>
@@ -15,9 +16,17 @@
       border-color: orangered;
       color: midnightblue;
     }
+
+    .contentblock {
+      vertical-align: middle;
+      background-color: Lavender;
+      padding: 0.5em;
+      border-radius: 0.5em;
+    }
   </style>
   <script>
-    var server_status = {}
+    window.server_state = null;
+    var last_server_update = null;
 
     function fetchData() {
       return {
@@ -28,6 +37,11 @@
             const response = await fetch('/status');
             const data = await response.json();
             this.items = data;
+            window.server_state = {};
+            window.server_state.items = data;
+            window.server_state.loading = false;
+            window.last_server_update = new Date();
+
           } catch (error) {
             console.error('Error fetching data:', error);
           } finally {
@@ -39,6 +53,16 @@
         }
       };
     };
+
+    function updateData() {
+      if (window.last_server_update != null && window.server_state != null) {
+        now = new Date();
+        if ((now - window.last_server_update) / 1000 < 3)
+          return window.server_state;
+      }
+
+      return fetchData();
+    }
 
     async function remove_blacklist(ip_addr) {
 
@@ -127,7 +151,7 @@
   </script>
 </head>
 
-<body style="background-color: AliceBlue;">
+<body style="background-color: rgb(240, 248, 255);">
   <main class="container">
     <h1>Dms web interface</h1>
     <small>A basic interface for dms administration</small><br>
@@ -137,12 +161,12 @@
     <h2>Blacklist</h2>
     <p>Blacklist has priority over whitelist</p>
 
-    <div x-data="fetchData()" id="blacklistcontainer">
+    <div x-data="updateData()" id="blacklistcontainer">
       <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
       <!-- Use x-for to loop over the fetched data -->
-      <div x-show="!loading" style="vertical-align: middle;">
+      <div x-show="!loading" class="contentblock">
         <div class="grid">
           <div><strong>Ip address</strong></div>
           <div><strong>Mask</strong></div>
@@ -159,17 +183,33 @@
             </div>
           </article>
         </template>
-        <button>Add to blacklist</button>
+
+        <div x-data="{ expanded: false }">
+          <button @click="expanded = ! expanded">Add to blacklist</button>
+
+          <div x-show="expanded" x-collapse style="padding: 0.5em;">
+            <article>
+              <form>
+              <div class="grid">
+                <div>Ip address</div>
+                <div><input name="ip_addr" placeholder="Ip address, like 192.168.0.1" /></div>
+                <div><button>Submit</button></div>
+              </div>
+            </form>
+            </article>
+          </div>
+        </div>
+
       </div>
     </div><!-- /blacklistcontainer -->
 
     <h2>Whitelist</h2>
-    <div x-data="fetchData()" id="whitelistcontainer">
+    <div x-data="updateData()" id="whitelistcontainer">
       <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
       <!-- Use x-for to loop over the fetched data -->
-      <div x-show="!loading" style="vertical-align: middle;">
+      <div x-show="!loading" class="contentblock">
         <div class="grid">
           <div><strong>Ip address</strong></div>
           <div><strong>Mask</strong></div>
@@ -186,17 +226,32 @@
             </div>
           </article>
         </template>
-        <button>Add to whitelist</button>
+        <div x-data="{ expanded: false }">
+          <button @click="expanded = ! expanded">Add to blacklist</button>
+
+          <div x-show="expanded" x-collapse style="padding: 0.5em;">
+            <article>
+              <form>
+              <div class="grid">
+                <div>Ip address</div>
+                <div><input name="ip_addr" placeholder="Ip address, like 192.168.0.1" /></div>
+                <div><button>Submit</button></div>
+              </div>
+            </form>
+            </article>
+          </div>
+        </div>
+
       </div>
     </div><!-- /whitelistcontainer -->
 
     <h2>Connected clients</h2>
-    <div x-data="fetchData()">
+    <div x-data="updateData()">
       <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
       <!-- Use x-for to loop over the fetched data -->
-      <div x-show="!loading" style="vertical-align: middle;">
+      <div x-show="!loading" class="contentblock">
         <div class="grid">
           <div><strong>Ip address</strong></div>
           <div style=><strong>Action</strong></div>
@@ -217,12 +272,12 @@
     </div>
 
     <h2>Refused clients</h2>
-    <div x-data="fetchData()">
+    <div x-data="updateData()">
       <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
       <!-- Use x-for to loop over the fetched data -->
-      <div x-show="!loading" style="vertical-align: middle;">
+      <div x-show="!loading" class="contentblock">
         <article>
           <template x-for="(value, index) in items['refused']">
             <div><button x-on:click="unblock(index)" x-text="index"></button></div>

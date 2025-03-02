@@ -120,6 +120,9 @@ Usage of dms:
      - workaround for some bad event subscribers
    * - ``-transcodeLogPattern``
      - pattern where to write transcode logs to. The ``[tsname]`` placeholder is replaced with the name of the item currently being played. The default is ``$HOME/.dms/log/[tsname]``. You may turn off transcode logging entirely by setting it to ``/dev/null``. You may log to stderr by setting ``/dev/stderr``.
+   * - ``generateConfig``
+     - dump the current configuration to json in the stdout and exit
+ 
 
 An example json configuration file::
 

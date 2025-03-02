@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"net/http"
 
 	"github.com/anacrolix/dms/dlna/dms"
 	"github.com/gin-gonic/gin"
@@ -67,7 +68,11 @@ func WebadminStartAsync(sharedSettings *dms.Server) {
 
 	router := gin.Default()
 
-	router.Static("/webassets", "./webassets")
+	router.Static("/webui", "./webassets")
+
+	router.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusFound, "/webui")
+	})
 
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
