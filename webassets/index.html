@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="./webadmin.js"></script>
 
   <title>Dms web interface</title>
   <style>
@@ -24,131 +25,7 @@
       border-radius: 0.5em;
     }
   </style>
-  <script>
-    window.server_state = null;
-    var last_server_update = null;
 
-    function fetchData() {
-      return {
-        items: {},
-        loading: true,
-        async fetchData() {
-          try {
-            const response = await fetch('/status');
-            const data = await response.json();
-            this.items = data;
-            window.server_state = {};
-            window.server_state.items = data;
-            window.server_state.loading = false;
-            window.last_server_update = new Date();
-
-          } catch (error) {
-            console.error('Error fetching data:', error);
-          } finally {
-            this.loading = false;
-          }
-        },
-        init() {
-          this.fetchData();
-        }
-      };
-    };
-
-    function updateData() {
-      if (window.last_server_update != null && window.server_state != null) {
-        now = new Date();
-        if ((now - window.last_server_update) / 1000 < 3)
-          return window.server_state;
-      }
-
-      return fetchData();
-    }
-
-    async function remove_blacklist(ip_addr) {
-
-      if (!confirm('Are you sure you want to remove ' + ip_addr + " from the blacklist?"))
-        return;
-
-      try {
-        const response = await fetch('/blacklist/' + ip_addr, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = await response.json();
-        alert(JSON.stringify(data));
-        location.reload();
-        // Handle the response data here
-      } catch (error) {
-        alert(JSON.stringify(data));
-        console.error('Error:', error);
-      }
-    }
-
-    async function remove_whitelist(ip_addr) {
-      if (!confirm('Are you sure you want to add ' + ip_addr + " to the whitelist?"))
-        return;
-
-      try {
-        const response = await fetch('/whitelist/' + ip_addr, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = await response.json();
-        alert(JSON.stringify(data));
-        location.reload();
-        // Handle the response data here
-      } catch (error) {
-        alert(JSON.stringify(data));
-        console.error('Error:', error);
-      }
-    }
-
-    async function block(ip_addr) {
-      if (!confirm('Are you sure you want to block ' + ip_addr + " ?"))
-        return;
-
-      try {
-        const response = await fetch('/blacklist/' + ip_addr, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = await response.json();
-        alert(JSON.stringify(data));
-        location.reload();
-        // Handle the response data here
-      } catch (error) {
-        alert(JSON.stringify(data));
-        console.error('Error:', error);
-      }
-    }
-
-    async function unblock(ip_addr) {
-      if (!confirm('Are you sure you want to unblock ' + ip_addr + " ?"))
-        return;
-
-      try {
-        const response = await fetch('/whitelist/' + ip_addr, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = await response.json();
-        alert(JSON.stringify(data));
-        location.reload();
-        // Handle the response data here
-      } catch (error) {
-        alert(JSON.stringify(data));
-        console.error('Error:', error);
-      }
-    }
-  </script>
 </head>
 
 <body style="background-color: rgb(240, 248, 255);">
@@ -162,10 +39,8 @@
     <p>Blacklist has priority over whitelist</p>
 
     <div x-data="updateData()" id="blacklistcontainer">
-      <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
-      <!-- Use x-for to loop over the fetched data -->
       <div x-show="!loading" class="contentblock">
         <div class="grid">
           <div><strong>Ip address</strong></div>
@@ -188,14 +63,14 @@
           <button @click="expanded = ! expanded">Add to blacklist</button>
 
           <div x-show="expanded" x-collapse style="padding: 0.5em;">
-            <article>
-              <form>
-              <div class="grid">
-                <div>Ip address</div>
-                <div><input name="ip_addr" placeholder="Ip address, like 192.168.0.1" /></div>
-                <div><button>Submit</button></div>
-              </div>
-            </form>
+            <article x-data="genericFormHandler('/blacklist/')">
+              <form @submit.prevent="submitForm">
+                <div class="grid">
+                  <div>Ip address</div>
+                  <div><input name="ip_addr" placeholder="Ip address, like 192.168.0.1" x-model="ip_addr"/></div>
+                  <div><input type="submit" value="Submit"></div>
+                </div>
+              </form>
             </article>
           </div>
         </div>
@@ -205,10 +80,8 @@
 
     <h2>Whitelist</h2>
     <div x-data="updateData()" id="whitelistcontainer">
-      <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
-      <!-- Use x-for to loop over the fetched data -->
       <div x-show="!loading" class="contentblock">
         <div class="grid">
           <div><strong>Ip address</strong></div>
@@ -227,17 +100,17 @@
           </article>
         </template>
         <div x-data="{ expanded: false }">
-          <button @click="expanded = ! expanded">Add to blacklist</button>
+          <button @click="expanded = ! expanded">Add to whitelist</button>
 
           <div x-show="expanded" x-collapse style="padding: 0.5em;">
-            <article>
-              <form>
-              <div class="grid">
-                <div>Ip address</div>
-                <div><input name="ip_addr" placeholder="Ip address, like 192.168.0.1" /></div>
-                <div><button>Submit</button></div>
-              </div>
-            </form>
+            <article x-data="genericFormHandler('/whitelist/')">
+              <form @submit.prevent="submitForm">
+                <div class="grid">
+                  <div>Ip address</div>
+                  <div><input name="ip_addr" placeholder="Ip address, like 192.168.0.1" x-model="ip_addr"/></div>
+                  <div><input type="submit" value="Submit"></div>
+                </div>
+              </form>
             </article>
           </div>
         </div>
@@ -247,10 +120,8 @@
 
     <h2>Connected clients</h2>
     <div x-data="updateData()">
-      <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
-      <!-- Use x-for to loop over the fetched data -->
       <div x-show="!loading" class="contentblock">
         <div class="grid">
           <div><strong>Ip address</strong></div>
@@ -273,10 +144,8 @@
 
     <h2>Refused clients</h2>
     <div x-data="updateData()">
-      <!-- Display a loading message while fetching data -->
       <div x-show="loading">Loading...</div>
 
-      <!-- Use x-for to loop over the fetched data -->
       <div x-show="!loading" class="contentblock">
         <article>
           <template x-for="(value, index) in items['refused']">

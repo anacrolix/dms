@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// auth maybe? https://withcodeexample.com/chapter-7-authentication-and-authorization-in-gin/
+
 func randomPassword() string {
 	length := 32
 	randomArray := make([]byte, length)
