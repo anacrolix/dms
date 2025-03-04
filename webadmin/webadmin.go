@@ -3,15 +3,61 @@ package webadmin
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/anacrolix/dms/dlna/dms"
 	"github.com/gin-gonic/gin"
 )
 
 // auth maybe? https://withcodeexample.com/chapter-7-authentication-and-authorization-in-gin/
+
+func getExecutableFolder() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return "", err
+	}
+
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return "", err
+	}
+
+	exeDir := filepath.Dir(exePath)
+	return exeDir, nil
+}
+
+func fileOrFolderExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
+}
+
+func findAssetsFolder() (string, error) {
+	good, _ := fileOrFolderExists("./webassets")
+	if good {
+		return filepath.Abs("./webassets")
+	}
+	path, err := getExecutableFolder()
+	if err == nil {
+		path = filepath.Join(path, "webassets")
+		return path, nil
+	}
+
+	return "", fs.ErrInvalid
+}
 
 func randomPassword() string {
 	length := 32
@@ -61,7 +107,7 @@ func deleterHelper(c *gin.Context, iPNet []*net.IPNet, s_ip string) ([]*net.IPNe
 	return iPNet, nhit
 }
 
-func WebadminStartAsync(sharedSettings *dms.Server) {
+func WebadminStartAsync(sharedSettings *dms.Server) error {
 
 	if len(sharedSettings.AdminPassword) == 0 {
 		sharedSettings.AdminPassword = randomPassword()
@@ -70,7 +116,14 @@ func WebadminStartAsync(sharedSettings *dms.Server) {
 
 	router := gin.Default()
 
-	router.Static("/webui", "./webassets")
+	assetFolder, err := findAssetsFolder()
+
+	if err != nil {
+		fmt.Println("Unable to find the static folder for the web server.")
+		return err
+	}
+
+	router.Static("/webui", assetFolder)
 
 	router.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/webui")
@@ -154,4 +207,5 @@ func WebadminStartAsync(sharedSettings *dms.Server) {
 	})
 
 	router.Run() // listen and serve on 0.0.0.0:8080
+	return nil
 }
