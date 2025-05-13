@@ -500,17 +500,90 @@ type object struct {
 	RootObjectPath string
 }
 
-// Returns the number of children this object has, such as for a container.
-func (cds *contentDirectoryService) objectChildCount(me object) int {
-	objs, err := cds.readContainer(me, "", "")
+func (me *contentDirectoryService) isOfInterest(
+	cdsObject object,
+	fileInfo os.FileInfo,
+) (ret bool, err error) {
+	entryFilePath := cdsObject.FilePath()
+	ignored, err := me.IgnorePath(entryFilePath)
 	if err != nil {
-		cds.Logger.Printf("error reading container: %s", err)
+		return
 	}
-	return len(objs)
+	if ignored {
+		return
+	}
+	isDmsMetadata := strings.HasSuffix(entryFilePath, dmsMetadataSuffix)
+	if !fileInfo.IsDir() && me.AllowDynamicStreams && isDmsMetadata {
+		return true, nil
+	}
+
+	if fileInfo.IsDir() {
+		hasChildren, err := me.objectHasChildren(cdsObject, fileInfo)
+		return hasChildren, err
+	}
+	if !fileInfo.Mode().IsRegular() {
+		me.Logger.Printf("%s ignored: non-regular file", cdsObject.FilePath())
+		return
+	}
+
+	mimeType, err := MimeTypeByPath(entryFilePath)
+	if err != nil {
+		return
+	}
+
+	if !mimeType.IsMedia() {
+		return
+	}
+	return true, nil
 }
 
-func (cds *contentDirectoryService) objectHasChildren(obj object) bool {
-	return cds.objectChildCount(obj) != 0
+// Returns the number of children this object has, such as for a container.
+func (cds *contentDirectoryService) objectChildCount(me object) (count int) {
+	fileInfoSlice, err := me.readDir()
+	if err != nil {
+		return
+	}
+	for _, fi := range fileInfoSlice {
+		child := object{path.Join(me.Path, fi.Name()), cds.RootObjectPath}
+		isChild, err := cds.isOfInterest(child, fi)
+		if err != nil {
+			cds.Logger.Printf("error with %s: %s", child.FilePath(), err)
+			continue
+		}
+
+		if isChild {
+			count++
+		}
+	}
+	return
+}
+
+// Returns true if a recursive search for playable items in the provided
+// directory succeeds. Returns true on first hit.
+func (me *contentDirectoryService) objectHasChildren(
+	cdsObject object,
+	fileInfo os.FileInfo,
+) (ret bool, err error) {
+	if !fileInfo.IsDir() {
+		panic("Expected directory")
+	}
+
+	files, err := cdsObject.readDir()
+	if err != nil {
+		return
+	}
+	for _, fi := range files {
+		child := object{path.Join(cdsObject.Path, fi.Name()), me.RootObjectPath}
+		isCdsObj, err := me.isOfInterest(child, fi)
+		if err != nil {
+			return false, err
+		}
+		if isCdsObj {
+			// Return on first hit. We don't want a full library scan.
+			return true, nil
+		}
+	}
+	return
 }
 
 // Returns the actual local filesystem path for the object.
