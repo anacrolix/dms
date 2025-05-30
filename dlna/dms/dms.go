@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -280,6 +281,7 @@ type Server struct {
 	TranscodeLogPattern string
 	Logger              log.Logger
 	eventingLogger      log.Logger
+	FS                  fs.FS
 }
 
 // UPnP SOAP service.
@@ -638,7 +640,7 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func safeFilePath(root, given string) string {
-	return filepath.Join(root, filepath.FromSlash(path.Clean("/" + given))[1:])
+	return path.Join(root, path.Clean(given))
 }
 
 func (s *Server) filePath(_path string) string {
@@ -864,7 +866,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 		} else {
 			k = r.URL.Query().Get("transcode")
 		}
-		mimeType, err := MimeTypeByPath(filePath)
+		mimeType, err := MimeTypeByPath(server.FS, filePath)
 		if k == "" || mimeType.IsImage() {
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -872,7 +874,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			}
 			w.Header().Set("Content-Type", string(mimeType))
 			w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(path.Base(filePath)))
-			http.ServeFile(w, r, filePath)
+			http.ServeFileFS(w, r, server.FS, filePath)
 			return
 		}
 		if server.NoTranscode {
@@ -939,6 +941,11 @@ func (s *Server) initServices() (err error) {
 }
 
 func (srv *Server) Init() (err error) {
+	if srv.FS == nil {
+		fsys := os.DirFS(srv.RootObjectPath)
+		srv.FS = fsys
+	}
+	srv.RootObjectPath = "."
 	srv.eventingLogger = srv.Logger.WithNames("eventing")
 	srv.eventingLogger.Levelf(log.Debug, "hello %v", "world")
 	if err = srv.initServices(); err != nil {
@@ -1071,19 +1078,15 @@ func (me *Server) location(ip net.IP) string {
 
 // Can return nil info with nil err if an earlier Probe gave an error.
 func (srv *Server) ffmpegProbe(path string) (info *ffprobe.Info, err error) {
-	// We don't want relative paths in the cache.
-	path, err = filepath.Abs(path)
-	if err != nil {
-		return
-	}
-	fi, err := os.Stat(path)
+	fi, err := fs.Stat(srv.FS, path)
 	if err != nil {
 		return
 	}
 	key := ffmpegInfoCacheKey{path, fi.ModTime().UnixNano()}
 	value, ok := srv.FFProbeCache.Get(key)
 	if !ok {
-		info, err = ffprobe.Run(path)
+		uri := fmt.Sprintf("http://127.0.0.1:%d%s?path=%s", srv.httpPort(), resPath, path)
+		info, err = ffprobe.Run(uri)
 		err = suppressFFmpegProbeDataErrors(err)
 		srv.FFProbeCache.Set(key, info)
 		return
@@ -1094,11 +1097,8 @@ func (srv *Server) ffmpegProbe(path string) (info *ffprobe.Info, err error) {
 
 // IgnorePath detects if a file/directory should be ignored.
 func (server *Server) IgnorePath(path string) (bool, error) {
-	if !filepath.IsAbs(path) {
-		return false, fmt.Errorf("Path must be absolute: %s", path)
-	}
 	if server.IgnoreHidden {
-		if hidden, err := isHiddenPath(path); err != nil {
+		if hidden, err := isHiddenPath(server.FS, path); err != nil {
 			return false, err
 		} else if hidden {
 			log.Print(path, " ignored: hidden")
@@ -1106,7 +1106,7 @@ func (server *Server) IgnorePath(path string) (bool, error) {
 		}
 	}
 	if server.IgnoreUnreadable {
-		if readable, err := isReadablePath(path); err != nil {
+		if readable, err := isReadablePath(server.FS, path); err != nil {
 			return false, err
 		} else if !readable {
 			log.Print(path, " ignored: unreadable")
@@ -1124,13 +1124,12 @@ func (server *Server) IgnorePath(path string) (bool, error) {
 	return false, nil
 }
 
-func tryToOpenPath(path string) (bool, error) {
+func isReadablePath(fsys fs.FS, path string) (bool, error) {
 	// Ugly but portable way to check if we can open a file/directory
-	if fh, err := os.Open(path); err == nil {
-		fh.Close()
-		return true, nil
-	} else if !os.IsPermission(err) {
+	f, err := fsys.Open(path)
+	if err != nil {
 		return false, err
 	}
-	return false, nil
+	f.Close()
+	return true, nil
 }

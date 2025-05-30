@@ -4,23 +4,19 @@
 package dms
 
 import (
+	"io/fs"
+	"path/filepath"
 	"strings"
-
-	"golang.org/x/sys/unix"
 )
 
-func isHiddenPath(path string) (bool, error) {
-	return strings.Contains(path, "/."), nil
-}
-
-func isReadablePath(path string) (bool, error) {
-	err := unix.Access(path, unix.R_OK)
-	switch err {
-	case nil:
-		return true, nil
-	case unix.EACCES:
+func isHiddenPath(fsys fs.FS, path string) (bool, error) {
+	if path == "." {
 		return false, nil
-	default:
-		return false, err
 	}
+	base := filepath.Base(path)
+	if strings.HasPrefix(base, ".") {
+		return true, nil
+	}
+
+	return isHiddenPath(fsys, filepath.Dir(path))
 }
