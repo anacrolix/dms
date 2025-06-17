@@ -226,10 +226,14 @@ func (me *Server) send(buf []byte, addr *net.UDPAddr) {
 
 func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr) {
 	go func() {
+		timer := time.NewTimer(delay)
 		select {
-		case <-time.After(delay):
+		case <-timer.C:
 			me.send(buf, addr)
 		case <-me.closed:
+			if !timer.Stop() {
+				<-timer.C
+			}
 		}
 	}()
 }
