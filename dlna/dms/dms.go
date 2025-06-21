@@ -172,23 +172,28 @@ const ssdpInterfaceFlags = net.FlagUp | net.FlagMulticast
 func (me *Server) doSSDP() {
 	var wg sync.WaitGroup
 	for _, if_ := range me.Interfaces {
-		if_ := if_
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			me.ssdpInterface(if_)
-		}()
+		for _, addr := range []string{ssdp.AddrString, ssdp.AddrString6LL, ssdp.AddrString6SL} {
+			if_ := if_
+			addr := addr
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				me.ssdpInterface(if_, addr)
+			}()
+		}
 	}
 	wg.Wait()
 }
 
 // Run SSDP server on an interface.
-func (me *Server) ssdpInterface(if_ net.Interface) {
+func (me *Server) ssdpInterface(if_ net.Interface, addrString string) {
 	logger := me.Logger.WithNames("ssdp", if_.Name)
 	s := ssdp.Server{
-		Interface: if_,
-		Devices:   devices(),
-		Services:  serviceTypes(),
+		Interface:  if_,
+		AddrString: addrString,
+		NetAddr:    ssdp.AddrString2NetAdd[addrString],
+		Devices:    devices(),
+		Services:   serviceTypes(),
 		Location: func(ip net.IP) string {
 			return me.location(ip)
 		},
