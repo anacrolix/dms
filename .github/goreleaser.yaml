@@ -10,3 +10,5 @@ builds:
     - arm
 upx:
   - enabled: true
+archives:
+  - format: binary
