@@ -1,0 +1,10 @@
+builds:
+  - goos:
+    - darwin
+    - windows
+    - linux
+    - freebsd
+    goarch:
+    - arm64
+    - amd64
+    - arm
