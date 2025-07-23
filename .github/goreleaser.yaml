@@ -8,3 +8,5 @@ builds:
     - arm64
     - amd64
     - arm
+upx:
+  - enabled: true
