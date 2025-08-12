@@ -4,33 +4,36 @@
 package dms
 
 import (
+	"io/fs"
 	"path/filepath"
+	"syscall"
 
 	"golang.org/x/sys/windows"
 )
 
 const hiddenAttributes = windows.FILE_ATTRIBUTE_HIDDEN | windows.FILE_ATTRIBUTE_SYSTEM
 
-func isHiddenPath(path string) (hidden bool, err error) {
-	if path == filepath.VolumeName(path)+"\\" {
-		// Volumes always have the "SYSTEM" flag, so do not even test them
+func isHiddenPath(fsys *fs.FS, path string) (hidden bool, err error) {
+	if path == "." {
 		return false, nil
 	}
-	winPath, err := windows.UTF16PtrFromString(path)
+	f, err := (*fsys).Open(path)
 	if err != nil {
-		return
+		return false, err
 	}
-	attrs, err := windows.GetFileAttributes(winPath)
+	defer f.Close()
+	fi, err := f.Stat()
 	if err != nil {
-		return
+		return false, err
 	}
-	if attrs&hiddenAttributes != 0 {
-		hidden = true
-		return
+	// Extract the Win32FileAttributeData from Sys()
+	sys, ok := fi.Sys().(*syscall.Win32FileAttributeData)
+	if !ok {
+		return false, nil // Not a Windows file system? Default to non-hidden.
 	}
-	return isHiddenPath(filepath.Dir(path))
-}
+	if (sys.FileAttributes & hiddenAttributes) != 0 {
+		return true, nil
+	}
 
-func isReadablePath(path string) (bool, error) {
-	return tryToOpenPath(path)
+	return isHiddenPath(fsys, filepath.ToSlash(filepath.Dir(path)))
 }

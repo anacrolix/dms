@@ -1,9 +1,9 @@
 package dms
 
 import (
+	"io/fs"
 	"mime"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 
@@ -56,10 +56,10 @@ func (mt mimeType) String() string {
 }
 
 // MimeTypeByPath determines the MIME-type of file at the given path
-func MimeTypeByPath(filePath string) (ret mimeType, err error) {
+func MimeTypeByPath(fsys fs.FS, filePath string) (ret mimeType, err error) {
 	ret = mimeTypeByBaseName(path.Base(filePath))
 	if ret == "" {
-		ret, err = mimeTypeByContent(filePath)
+		ret, err = mimeTypeByContent(fsys, filePath)
 	}
 	if ret == "video/x-msvideo" {
 		ret = "video/avi"
@@ -80,8 +80,8 @@ func mimeTypeByBaseName(name string) mimeType {
 }
 
 // Guess the MIME-type by analysing the first 512 bytes of the file.
-func mimeTypeByContent(path string) (ret mimeType, err error) {
-	file, err := os.Open(path)
+func mimeTypeByContent(fsys fs.FS, path string) (ret mimeType, err error) {
+	file, err := fsys.Open(path)
 	if err != nil {
 		return
 	}
