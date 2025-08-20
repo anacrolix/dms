@@ -19,6 +19,8 @@ jobs:
         with:
           fetch-depth: 0
           ref: refs/tags/v1.7.2
+      - name: add goreleaser config
+        run: curl -L https://github.com/anacrolix/dms/raw/refs/heads/master/.github/goreleaser.yaml -o ../goreleaser.yaml
       -
         name: Set up Go
         uses: actions/setup-go@v5
@@ -30,7 +32,7 @@ jobs:
           distribution: goreleaser
           # 'latest', 'nightly', or a semver
           version: '~> v2'
-          args: release --clean -f .github/goreleaser.yaml
+          args: release --clean -f ../goreleaser.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
