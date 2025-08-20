@@ -16,6 +16,7 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v4
+          - ref: v1.7.2
         with:
           fetch-depth: 0
       -
