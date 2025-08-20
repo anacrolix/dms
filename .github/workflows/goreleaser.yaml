@@ -16,9 +16,9 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v4
-          - ref: v1.7.2
         with:
           fetch-depth: 0
+          ref: refs/tags/v1.7.2
       -
         name: Set up Go
         uses: actions/setup-go@v5
