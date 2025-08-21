@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,7 +73,7 @@ func readDynamicStream(metadataPath string) (*dmsDynamicMediaItem, error) {
 	return &re, nil
 }
 
-func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObject object, fileInfo os.FileInfo, host, userAgent string) (ret interface{}, err error) {
+func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObject object, fileInfo fs.FileInfo, host, userAgent string) (ret interface{}, err error) {
 	// at this point we know that entryFilePath points to a .dms.json file; slurp and parse
 	dmsMediaItem, err := readDynamicStream(cdsObject.FilePath())
 	if err != nil {
@@ -100,12 +100,12 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 	obj.AlbumArtURI = iconURI
 
 	switch dmsMediaItem.Type {
-		case "video":
-			obj.Class = "object.item.videoItem"
-		case "audio":
-			obj.Class = "object.item.audioItem"
-		default:
-			obj.Class = "object.item.videoItem"
+	case "video":
+		obj.Class = "object.item.videoItem"
+	case "audio":
+		obj.Class = "object.item.audioItem"
+	default:
+		obj.Class = "object.item.videoItem"
 	}
 
 	obj.Title = dmsMediaItem.Title
@@ -170,7 +170,7 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 // returned if the entry is not of interest.
 func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 	cdsObject object,
-	fileInfo os.FileInfo,
+	fileInfo fs.FileInfo,
 	host, userAgent string,
 ) (ret interface{}, err error) {
 	entryFilePath := cdsObject.FilePath()
@@ -204,7 +204,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 		me.Logger.Printf("%s ignored: non-regular file", cdsObject.FilePath())
 		return
 	}
-	mimeType, err := MimeTypeByPath(entryFilePath)
+	mimeType, err := MimeTypeByPath(me.FS, entryFilePath)
 	if err != nil {
 		return
 	}
@@ -332,7 +332,7 @@ func (me *contentDirectoryService) readContainer(
 		// TODO(anacrolix): Dig up why this special cast was added.
 		FoldersLast: strings.Contains(userAgent, `AwoX/1.1`),
 	}
-	sfis.fileInfoSlice, err = o.readDir()
+	sfis.fileInfoSlice, err = o.readDir(me.FS)
 	if err != nil {
 		return
 	}
@@ -366,13 +366,9 @@ func (me *contentDirectoryService) objectFromID(id string) (o object, err error)
 		return
 	}
 	if o.Path == "0" {
-		o.Path = "/"
+		o.Path = "."
 	}
 	o.Path = path.Clean(o.Path)
-	if !path.IsAbs(o.Path) {
-		err = fmt.Errorf("bad ObjectID %v", o.Path)
-		return
-	}
 	o.RootObjectPath = me.RootObjectPath
 	return
 }
@@ -434,8 +430,8 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 			var ret interface{}
 			var err error
 			if me.OnBrowseMetadata == nil {
-				var fileInfo os.FileInfo
-				fileInfo, err = os.Stat(obj.FilePath())
+				var fileInfo fs.FileInfo
+				fileInfo, err = fs.Stat(me.FS, obj.FilePath())
 				if err != nil {
 					if os.IsNotExist(err) {
 						return nil, &upnp.Error{
@@ -502,7 +498,7 @@ type object struct {
 
 func (me *contentDirectoryService) isOfInterest(
 	cdsObject object,
-	fileInfo os.FileInfo,
+	fileInfo fs.FileInfo,
 ) (ret bool, err error) {
 	entryFilePath := cdsObject.FilePath()
 	ignored, err := me.IgnorePath(entryFilePath)
@@ -526,7 +522,7 @@ func (me *contentDirectoryService) isOfInterest(
 		return
 	}
 
-	mimeType, err := MimeTypeByPath(entryFilePath)
+	mimeType, err := MimeTypeByPath(me.FS, entryFilePath)
 	if err != nil {
 		return
 	}
@@ -539,7 +535,7 @@ func (me *contentDirectoryService) isOfInterest(
 
 // Returns the number of children this object has, such as for a container.
 func (cds *contentDirectoryService) objectChildCount(me object) (count int) {
-	fileInfoSlice, err := me.readDir()
+	fileInfoSlice, err := me.readDir(cds.FS)
 	if err != nil {
 		return
 	}
@@ -562,13 +558,13 @@ func (cds *contentDirectoryService) objectChildCount(me object) (count int) {
 // directory succeeds. Returns true on first hit.
 func (me *contentDirectoryService) objectHasChildren(
 	cdsObject object,
-	fileInfo os.FileInfo,
+	fileInfo fs.FileInfo,
 ) (ret bool, err error) {
 	if !fileInfo.IsDir() {
 		panic("Expected directory")
 	}
 
-	files, err := cdsObject.readDir()
+	files, err := cdsObject.readDir(me.FS)
 	if err != nil {
 		return
 	}
@@ -588,14 +584,11 @@ func (me *contentDirectoryService) objectHasChildren(
 
 // Returns the actual local filesystem path for the object.
 func (o *object) FilePath() string {
-	return filepath.Join(o.RootObjectPath, filepath.FromSlash(o.Path))
+	return path.Join(o.RootObjectPath, path.Clean(o.Path))
 }
 
 // Returns the ObjectID for the object. This is used in various ContentDirectory actions.
 func (o object) ID() string {
-	if !path.IsAbs(o.Path) {
-		log.Panicf("Relative object path: %s", o.Path)
-	}
 	if len(o.Path) == 1 {
 		return "0"
 	}
@@ -603,7 +596,7 @@ func (o object) ID() string {
 }
 
 func (o *object) IsRoot() bool {
-	return o.Path == "/"
+	return o.Path == "."
 }
 
 // Returns the object's parent ObjectID. Fortunately it can be deduced from the
@@ -618,31 +611,21 @@ func (o object) ParentID() string {
 
 // This function exists rather than just calling os.(*File).Readdir because I
 // want to stat(), not lstat() each entry.
-func (o *object) readDir() (fis []os.FileInfo, err error) {
-	dirPath := o.FilePath()
-	dirFile, err := os.Open(dirPath)
+func (o *object) readDir(fsys fs.FS) (fis []fs.FileInfo, err error) {
+	dirFile, err := fs.ReadDir(fsys, o.Path)
 	if err != nil {
 		return
 	}
-	defer dirFile.Close()
-	var dirContent []string
-	dirContent, err = dirFile.Readdirnames(-1)
-	if err != nil {
-		return
-	}
-	fis = make([]os.FileInfo, 0, len(dirContent))
-	for _, file := range dirContent {
-		fi, err := os.Stat(filepath.Join(dirPath, file))
-		if err != nil {
-			continue
-		}
+	fis = make([]fs.FileInfo, 0, len(dirFile))
+	for _, file := range dirFile {
+		fi, _ := file.Info()
 		fis = append(fis, fi)
 	}
 	return
 }
 
 type sortableFileInfoSlice struct {
-	fileInfoSlice []os.FileInfo
+	fileInfoSlice []fs.FileInfo
 	FoldersLast   bool
 }
 
