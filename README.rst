@@ -45,7 +45,7 @@ Running DMS using Docker
 .. code-block:: bash
 
    docker pull ghcr.io/anacrolix/dms:latest
-   docker run -d --network host -v /mediadirectory:/dmsdir ghcr.io/anacrolix/dms:latest
+   docker run -d --network host -e DMS_FLAGS='-friendlyName dms' -v /mediadirectory:/dmsdir ghcr.io/anacrolix/dms:latest
 
 Running DMS as a systemd service
 =================================
