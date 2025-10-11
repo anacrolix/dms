@@ -222,7 +222,15 @@ func mainErr() error {
 			return
 		}(config.IfName),
 		HTTPConn: func() net.Listener {
-			conn, err := net.Listen("tcp", config.Http)
+			network := "tcp"
+			host, _, err := net.SplitHostPort(config.Http)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if host == "::" {
+				network = "tcp6"
+			}
+			conn, err := net.Listen(network, config.Http)
 			if err != nil {
 				log.Fatal(err)
 			}
