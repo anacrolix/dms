@@ -18,7 +18,7 @@ will also provide thumbnails where possible.
 dms also supports serving dynamic streams (e.g. a live rtsp stream) generated 
 on the fly with the help of an external application (e.g. ffmpeg).
 
-dms uses ``ffprobe``/``avprobe`` to get media data such as bitrate and duration, ``ffmpeg``/``avconv`` for video transoding, and ``ffmpegthumbnailer`` for generating thumbnails when browsing. These commands must be in the ``PATH`` given to ``dms`` or the features requiring them will be disabled.
+dms uses ``ffprobe``/``avprobe`` to get media data such as bitrate and duration, and ``ffmpeg``/``avconv`` for video transcoding and thumbnail generation. These commands must be in the ``PATH`` given to ``dms`` or the features requiring them will be disabled.
 
 .. image:: https://i.imgur.com/qbHilI7.png
 
@@ -31,7 +31,7 @@ Assuming ``$GOPATH`` and Go have been configured already::
 
     $ go install github.com/anacrolix/dms@latest
 
-Ensure ``ffmpeg``/``avconv`` and/or ``ffmpegthumbnailer`` are in the ``PATH`` if the features depending on them are desired.
+Ensure ``ffmpeg``/``avconv`` are in the ``PATH`` if the features depending on them are desired.
 
 To run::
 

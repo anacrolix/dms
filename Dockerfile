@@ -16,7 +16,7 @@ WORKDIR /dmsdir
 VOLUME /dmsdir
 RUN chown -R user:user /dmsdir
 RUN apk add --no-cache \
-    ffmpeg ffmpegthumbnailer mailcap
+    ffmpeg mailcap
 COPY --from=build /build/bin/dms /dms
 USER user:user
 
