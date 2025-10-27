@@ -2,19 +2,18 @@ package dms
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -652,32 +651,22 @@ func (s *Server) filePath(_path string) string {
 
 func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 	filePath := me.filePath(r.URL.Query().Get("path"))
-	c := r.URL.Query().Get("c")
-	if c == "" {
-		c = "png"
-	}
-	args := []string{}
-	_, fqThumbnail := os.LookupEnv("DMS_THUMBNAIL_FULLQUALITY")
-	if fqThumbnail {
-		args = append(args, "-s", "0", "-q", "10")
-	}
+	
+	// Create a context with timeout for thumbnail generation
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
 
-	_, randThumbnail := os.LookupEnv("DMS_THUMBNAIL_RANDOM")
-	if randThumbnail {
-		args = append(args, "-t", strconv.Itoa(rand.Intn(100)))
-	}
-
-	args = append(args, "-i", filePath, "-o", "/dev/stdout", "-c"+c)
-	cmd := exec.Command("ffmpegthumbnailer", args...)
-	// cmd.Stderr = os.Stderr
-	body, err := cmd.Output()
+	// Generate thumbnail using ffmpeg
+	body, err := generateThumbnailFFmpeg(ctx, filePath)
 	if err != nil {
-		// serve 1st Icon if no ffmpegthumbnailer
+		// serve 1st Icon if thumbnail generation fails
 		w.Header().Set("Content-Type", me.Icons[0].Mimetype)
 		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(me.Icons[0].Bytes))
-		// http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	
+	// Serve the generated thumbnail as PNG
+	w.Header().Set("Content-Type", "image/png")
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(body))
 }
 
