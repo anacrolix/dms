@@ -136,7 +136,7 @@ func ConvertError(err error) *Error {
 	if e, ok := err.(*Error); ok {
 		return e
 	}
-	return Errorf(ActionFailedErrorCode, err.Error())
+	return Errorf(ActionFailedErrorCode, "%s", err.Error())
 }
 
 type Action struct {
