@@ -5,8 +5,7 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -buildmode=pie -ldflags="-s -w" -o bin/dms .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/dms .
 
 FROM docker.io/alpine:edge AS prod
 
