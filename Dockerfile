@@ -1,11 +1,12 @@
 FROM docker.io/alpine:edge AS build
 
-RUN apk add --no-cache --update go gcc
+RUN apk add --no-cache --update go gcc musl-dev
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/dms .
+ARG TARGETARCH
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o bin/dms .
 
 FROM docker.io/alpine:edge AS prod
 
