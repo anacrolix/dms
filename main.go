@@ -49,7 +49,8 @@ type dmsConfig struct {
 	IgnoreHidden        bool
 	IgnoreUnreadable    bool
 	IgnorePaths         []string
-	AllowedIpNets       []*net.IPNet
+	AllowedIps          string       // Comma-separated IPs/CIDRs for JSON config
+	AllowedIpNets       []*net.IPNet `json:"-"` // Parsed IP networks, not directly from JSON
 	AllowDynamicStreams bool
 	TranscodeLogPattern string
 }
@@ -179,6 +180,10 @@ func mainErr() error {
 
 	if len(*configFilePath) > 0 {
 		config.load(*configFilePath)
+		// Parse AllowedIps from config file if provided
+		if config.AllowedIps != "" {
+			config.AllowedIpNets = makeIpNets(config.AllowedIps)
+		}
 	}
 
 	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
