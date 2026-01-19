@@ -124,7 +124,7 @@ func makeConn(ifi net.Interface, netAddr *net.UDPAddr) (ret *net.UDPConn, err er
 	} else {
 		p := ipv6.NewPacketConn(ret)
 		if err := p.SetMulticastHopLimit(2); err != nil {
-			slog.Info("error setting multicast hop limit", "error", err)
+			slog.Info("error setting multicast hop limit", "error", err, "interface", ifi.Name)
 		}
 	}
 	// if err := p.SetMulticastLoopback(true); err != nil {
@@ -244,7 +244,8 @@ func (me *Server) makeNotifyMessage(target, nts string, extraHdrs [][2]string) [
 
 func (me *Server) send(buf []byte, addr *net.UDPAddr) {
 	if n, err := me.conn.WriteToUDP(buf, addr); err != nil {
-		me.Logger.Info("error writing to UDP socket", "error", err)
+		// TODO: Find a better way to do this.
+		me.Logger.Debug("error writing to UDP socket", "error", err)
 	} else if n != len(buf) {
 		me.Logger.Info("short write", "written", n, "total", len(buf))
 	}

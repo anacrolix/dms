@@ -219,7 +219,7 @@ func (me *Server) ssdpInterface(if_ net.Interface, addrString string) {
 		return
 	}
 	defer s.Close()
-	logger.Info("started SSDP", "interface", if_.Name)
+	logger.Debug("started SSDP", "interface", if_.Name)
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
