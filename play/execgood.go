@@ -5,11 +5,10 @@ package main
 
 import (
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"time"
-
-	"github.com/anacrolix/log"
 )
 
 func main() {
@@ -26,7 +25,7 @@ func main() {
 		io.Copy(w, out)
 		out.Close()
 		w.Close()
-		log.Println(cmd.Wait())
+		slog.Info("command finished", "result", cmd.Wait())
 	}()
 	time.Sleep(10 * time.Millisecond)
 	if _, err := io.Copy(os.Stdout, r); err != nil {

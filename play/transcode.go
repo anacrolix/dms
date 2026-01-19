@@ -7,10 +7,9 @@ import (
 	"bufio"
 	"flag"
 	"io"
+	"log/slog"
 	"os"
 	"time"
-
-	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/misc"
 )
@@ -20,18 +19,20 @@ func main() {
 	t := flag.String("t", "", "")
 	flag.Parse()
 	if flag.NArg() != 1 {
-		log.Fatalln("wrong argument count")
+		slog.Error("wrong argument count")
+		os.Exit(1)
 	}
 	r, err := misc.Transcode(flag.Arg(0), *ss, *t)
 	if err != nil {
-		log.Fatalln(err)
+		slog.Error("transcode error", "error", err)
+		os.Exit(1)
 	}
 	go func() {
 		buf := bufio.NewWriterSize(os.Stdout, 1234)
 		n, err := io.Copy(buf, r)
-		log.Println("copied", n, "bytes")
+		slog.Info("copied bytes", "count", n)
 		if err != nil {
-			log.Println(err)
+			slog.Info("copy error", "error", err)
 		}
 	}()
 	time.Sleep(time.Second)

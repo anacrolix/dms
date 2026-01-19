@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/anacrolix/ffprobe"
-	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/dlna"
 	"github.com/anacrolix/dms/misc"
@@ -77,7 +76,7 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 	// at this point we know that entryFilePath points to a .dms.json file; slurp and parse
 	dmsMediaItem, err := readDynamicStream(cdsObject.FilePath())
 	if err != nil {
-		me.Logger.Printf("%s ignored: %v", cdsObject.FilePath(), err)
+		me.Logger.Info("file ignored", "path", cdsObject.FilePath(), "error", err)
 		return
 	}
 
@@ -201,7 +200,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 		return
 	}
 	if !fileInfo.Mode().IsRegular() {
-		me.Logger.Printf("%s ignored: non-regular file", cdsObject.FilePath())
+		me.Logger.Info("ignored: non-regular file", "path", cdsObject.FilePath())
 		return
 	}
 	mimeType, err := MimeTypeByPath(me.FS, entryFilePath)
@@ -210,11 +209,11 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 	}
 	if !mimeType.IsMedia() {
 		if isDmsMetadata {
-			me.Logger.Levelf(
-				log.Debug,
-				"ignored %q: enable support for dynamic streams via the -allowDynamicStreams command line flag", cdsObject.FilePath())
+			me.Logger.Debug(
+				"ignored: enable support for dynamic streams via the -allowDynamicStreams command line flag",
+				"path", cdsObject.FilePath())
 		} else {
-			me.Logger.Levelf(log.Debug, "ignored %q: non-media file (%s)", cdsObject.FilePath(), mimeType)
+			me.Logger.Debug("ignored: non-media file", "path", cdsObject.FilePath(), "mime_type", mimeType)
 		}
 		return
 	}
@@ -248,7 +247,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 			}
 		case ffprobe.ExeNotFound:
 		default:
-			me.Logger.Printf("error probing %s: %s", entryFilePath, probeErr)
+			me.Logger.Info("error probing", "path", entryFilePath, "error", probeErr)
 		}
 	}
 	if obj.Title == "" {
@@ -341,7 +340,7 @@ func (me *contentDirectoryService) readContainer(
 		child := object{path.Join(o.Path, fi.Name()), me.RootObjectPath}
 		obj, err := me.cdsObjectToUpnpavObject(child, fi, host, userAgent)
 		if err != nil {
-			me.Logger.Printf("error with %s: %s", child.FilePath(), err)
+			me.Logger.Info("error with object", "path", child.FilePath(), "error", err)
 			continue
 		}
 		if obj != nil {
@@ -518,7 +517,7 @@ func (me *contentDirectoryService) isOfInterest(
 		return hasChildren, err
 	}
 	if !fileInfo.Mode().IsRegular() {
-		me.Logger.Printf("%s ignored: non-regular file", cdsObject.FilePath())
+		me.Logger.Info("ignored: non-regular file", "path", cdsObject.FilePath())
 		return
 	}
 
@@ -543,7 +542,7 @@ func (cds *contentDirectoryService) objectChildCount(me object) (count int) {
 		child := object{path.Join(me.Path, fi.Name()), cds.RootObjectPath}
 		isChild, err := cds.isOfInterest(child, fi)
 		if err != nil {
-			cds.Logger.Printf("error with %s: %s", child.FilePath(), err)
+			cds.Logger.Info("error with object", "path", child.FilePath(), "error", err)
 			continue
 		}
 

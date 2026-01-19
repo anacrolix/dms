@@ -5,16 +5,15 @@ package main
 
 import (
 	"flag"
+	"log/slog"
 
 	"github.com/anacrolix/ffprobe"
-	"github.com/anacrolix/log"
 )
 
 func main() {
-	log.SetFlags(log.Llongfile)
 	flag.Parse()
 	for _, path := range flag.Args() {
 		i, err := ffprobe.Probe(path)
-		log.Printf("%#v %#v", i, err)
+		slog.Info("ffprobe result", "info", i, "error", err)
 	}
 }

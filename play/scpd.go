@@ -6,9 +6,10 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/anacrolix/dms/upnp"
-	"github.com/anacrolix/log"
 )
 
 func main() {
@@ -35,7 +36,8 @@ func main() {
 	}
 	xml, err := xml.MarshalIndent(scpd, "", "  ")
 	if err != nil {
-		log.Fatalln(err)
+		slog.Error("error marshaling XML", "error", err)
+		os.Exit(1)
 	}
 	fmt.Print(string(xml))
 }

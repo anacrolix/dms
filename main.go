@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"io"
 	"io/ioutil"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -22,7 +23,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anacrolix/log"
 	"github.com/nfnt/resize"
 
 	"github.com/anacrolix/dms/dlna/dms"
@@ -58,14 +58,14 @@ type dmsConfig struct {
 func (config *dmsConfig) load(configPath string) {
 	file, err := os.Open(configPath)
 	if err != nil {
-		log.Printf("config error (config file: '%s'): %v\n", configPath, err)
+		slog.Info("config error", "config_file", configPath, "error", err)
 		return
 	}
 	defer file.Close()
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&config)
 	if err != nil {
-		log.Printf("config error: %v\n", err)
+		slog.Info("config error", "error", err)
 		return
 	}
 }
@@ -86,7 +86,7 @@ var config = &dmsConfig{
 func getDefaultFFprobeCachePath() (path string) {
 	_user, err := user.Current()
 	if err != nil {
-		log.Print(err)
+		slog.Info("error getting current user", "error", err)
 		return
 	}
 	path = filepath.Join(_user.HomeDir, ".dms-ffprobe-cache")
@@ -111,7 +111,7 @@ func (fc *fFprobeCache) Set(key interface{}, value interface{}) {
 	for _, v := range []interface{}{key, value} {
 		b, err := json.Marshal(v)
 		if err != nil {
-			log.Printf("Could not marshal %v: %s", v, err)
+			slog.Info("could not marshal value", "value", v, "error", err)
 			continue
 		}
 		size += int64(len(b))
@@ -122,7 +122,8 @@ func (fc *fFprobeCache) Set(key interface{}, value interface{}) {
 func main() {
 	err := mainErr()
 	if err != nil {
-		log.Fatalf("error in main: %v", err)
+		slog.Error("error in main", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -154,7 +155,7 @@ func mainErr() error {
 		return fmt.Errorf("%s: %s\n", "unexpected positional arguments", flag.Args())
 	}
 
-	logger := log.Default.WithNames("main")
+	logger := slog.Default().With(slog.String("component", "main"))
 
 	config.Path, _ = filepath.Abs(*path)
 	config.IfName = *ifName
@@ -186,22 +187,22 @@ func mainErr() error {
 		}
 	}
 
-	logger.Printf("device icon sizes are %q", config.DeviceIconSizes)
-	logger.Printf("allowed ip nets are %q", config.AllowedIpNets)
-	logger.Printf("serving folder %q", config.Path)
+	logger.Info("device icon sizes", "sizes", config.DeviceIconSizes)
+	logger.Info("allowed ip nets", "nets", config.AllowedIpNets)
+	logger.Info("serving folder", "path", config.Path)
 	if config.AllowDynamicStreams {
-		logger.Printf("Dynamic streams ARE allowed")
+		logger.Info("dynamic streams ARE allowed")
 	}
 
 	cache := &fFprobeCache{
 		c: rrcache.New(64 << 20),
 	}
 	if err := cache.load(config.FFprobeCachePath); err != nil {
-		log.Print(err)
+		slog.Info("error loading cache", "error", err)
 	}
 
 	dmsServer := &dms.Server{
-		Logger: logger.WithNames("dms", "server"),
+		Logger: logger.With(slog.String("subcomponent", "dms.server")),
 		Interfaces: func(ifName string) (ifs []net.Interface) {
 			var err error
 			if ifName == "" {
@@ -214,7 +215,8 @@ func mainErr() error {
 				}
 			}
 			if err != nil {
-				log.Fatal(err)
+				slog.Error("error getting network interfaces", "error", err)
+				os.Exit(1)
 			}
 			var tmp []net.Interface
 			for _, if_ := range ifs {
@@ -230,14 +232,16 @@ func mainErr() error {
 			network := "tcp"
 			host, _, err := net.SplitHostPort(config.Http)
 			if err != nil {
-				log.Fatal(err)
+				slog.Error("error parsing http address", "error", err)
+				os.Exit(1)
 			}
 			if host == "::" {
 				network = "tcp6"
 			}
 			conn, err := net.Listen(network, config.Http)
 			if err != nil {
-				log.Fatal(err)
+				slog.Error("error starting http listener", "error", err)
+				os.Exit(1)
 			}
 			return conn
 		}(),
@@ -255,18 +259,21 @@ func mainErr() error {
 			for _, size := range config.DeviceIconSizes {
 				s := strings.Split(size, ":")
 				if len(s) != 1 && len(s) != 2 {
-					log.Fatal("bad device icon size: ", size)
+					slog.Error("bad device icon size", "size", size)
+					os.Exit(1)
 				}
 				advertisedSize, err := strconv.Atoi(s[0])
 				if err != nil {
-					log.Fatal("bad device icon size: ", size)
+					slog.Error("bad device icon size", "size", size, "error", err)
+					os.Exit(1)
 				}
 				actualSize := advertisedSize
 				if len(s) == 2 {
 					// Force actual icon size to be different from advertised
 					actualSize, err = strconv.Atoi(s[1])
 					if err != nil {
-						log.Fatal("bad device icon size: ", size)
+						slog.Error("bad device icon size", "size", size, "error", err)
+						os.Exit(1)
 					}
 				}
 				icons = append(icons, dms.Icon{
@@ -287,11 +294,13 @@ func mainErr() error {
 		AllowedIpNets:       config.AllowedIpNets,
 	}
 	if err := dmsServer.Init(); err != nil {
-		log.Fatalf("error initing dms server: %v", err)
+		slog.Error("error initing dms server", "error", err)
+		os.Exit(1)
 	}
 	go func() {
 		if err := dmsServer.Run(); err != nil {
-			log.Fatal(err)
+			slog.Error("error running dms server", "error", err)
+			os.Exit(1)
 		}
 	}()
 	sigs := make(chan os.Signal, 1)
@@ -299,10 +308,11 @@ func mainErr() error {
 	<-sigs
 	err := dmsServer.Close()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("error closing dms server", "error", err)
+		os.Exit(1)
 	}
 	if err := cache.save(config.FFprobeCachePath); err != nil {
-		log.Print(err)
+		slog.Info("error saving cache", "error", err)
 	}
 	return nil
 }
@@ -322,7 +332,7 @@ func (cache *fFprobeCache) load(path string) error {
 	for _, item := range items {
 		cache.Set(item.Key, item.Value)
 	}
-	log.Printf("added %d items from cache", len(items))
+	slog.Info("added items from cache", "count", len(items))
 	return nil
 }
 
@@ -351,7 +361,7 @@ func (cache *fFprobeCache) save(path string) error {
 		err = os.Rename(f.Name(), path)
 	}
 	if err == nil {
-		log.Printf("saved cache with %d items", len(items))
+		slog.Info("saved cache", "count", len(items))
 	} else {
 		os.Remove(f.Name())
 	}
@@ -401,7 +411,7 @@ func makeIpNets(s string) []*net.IPNet {
 				if err == nil {
 					nets = append(nets, ipnet)
 				} else {
-					log.Printf("unable to parse expression %q", el)
+					slog.Info("unable to parse expression", "expression", el)
 				}
 
 			} else {
@@ -409,7 +419,7 @@ func makeIpNets(s string) []*net.IPNet {
 				if err == nil {
 					nets = append(nets, ipnet)
 				} else {
-					log.Printf("unable to parse ip %q", el)
+					slog.Info("unable to parse ip", "ip", el)
 				}
 			}
 		}

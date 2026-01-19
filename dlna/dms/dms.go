@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"io/ioutil"
+	"log/slog"
 	"math/rand"
 	"net"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"github.com/anacrolix/ffprobe"
-	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dms/dlna"
 	"github.com/anacrolix/dms/soap"
@@ -80,7 +80,8 @@ var transcodes = map[string]transcodeSpec{
 func makeDeviceUuid(unique string) string {
 	h := md5.New()
 	if _, err := io.WriteString(h, unique); err != nil {
-		log.Panicf("makeDeviceUuid write failed: %s", err)
+		slog.Error("makeDeviceUuid write failed", "error", err)
+		panic(err)
 	}
 	buf := h.Sum(nil)
 	return upnp.FormatUUID(buf)
@@ -188,7 +189,7 @@ func (me *Server) doSSDP() {
 
 // Run SSDP server on an interface.
 func (me *Server) ssdpInterface(if_ net.Interface, addrString string) {
-	logger := me.Logger.WithNames("ssdp", if_.Name)
+	logger := me.Logger.With(slog.String("ssdp", if_.Name))
 	s := ssdp.Server{
 		Interface:  if_,
 		AddrString: addrString,
@@ -214,16 +215,16 @@ func (me *Server) ssdpInterface(if_ net.Interface, addrString string) {
 			// good.
 			return
 		}
-		logger.Printf("error creating ssdp server on %s: %s", if_.Name, err)
+		logger.Info("error creating ssdp server", "interface", if_.Name, "error", err)
 		return
 	}
 	defer s.Close()
-	logger.Levelf(log.Info, "started SSDP on %q", if_.Name)
+	logger.Info("started SSDP", "interface", if_.Name)
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
 		if err := s.Serve(); err != nil {
-			logger.Printf("%q: %q\n", if_.Name, err)
+			logger.Info("ssdp serve error", "interface", if_.Name, "error", err)
 		}
 	}()
 	select {
@@ -284,8 +285,8 @@ type Server struct {
 	// pattern where to write transcode logs to. The [tsname] placeholder is replaced with the name
 	// of the item currently being played. The default is $HOME/.dms/log/[tsname]
 	TranscodeLogPattern string
-	Logger              log.Logger
-	eventingLogger      log.Logger
+	Logger              *slog.Logger
+	eventingLogger      *slog.Logger
 	FS                  fs.FS
 }
 
@@ -462,10 +463,10 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 		os.MkdirAll(filepath.Dir(stderrPath), 0o750)
 		aLogFile, err := os.Create(stderrPath)
 		if err != nil {
-			log.Printf("couldn't create transcode log file: %s", err)
+			slog.Info("couldn't create transcode log file", "error", err)
 		} else {
 			defer aLogFile.Close()
-			log.Printf("logging transcode to %q", stderrPath)
+			slog.Info("logging transcode", "path", stderrPath)
 		}
 		logFile = aLogFile
 	}
@@ -493,14 +494,16 @@ func getDefaultFriendlyName() string {
 		func() string {
 			user, err := user.Current()
 			if err != nil {
-				log.Panicf("getDefaultFriendlyName could not get username: %s", err)
+				slog.Error("getDefaultFriendlyName could not get username", "error", err)
+				panic(err)
 			}
 			return user.Name
 		}(),
 		func() string {
 			name, err := os.Hostname()
 			if err != nil {
-				log.Panicf("getDefaultFriendlyName could not get hostname: %s", err)
+				slog.Error("getDefaultFriendlyName could not get hostname", "error", err)
+				panic(err)
 			}
 			return name
 		}())
@@ -509,7 +512,8 @@ func getDefaultFriendlyName() string {
 func xmlMarshalOrPanic(value interface{}) []byte {
 	ret, err := xml.MarshalIndent(value, "", "  ")
 	if err != nil {
-		log.Panicf("xmlMarshalOrPanic failed to marshal %v: %s", value, err)
+		slog.Error("xmlMarshalOrPanic failed to marshal", "value", value, "error", err)
+		panic(err)
 	}
 	return ret
 }
@@ -607,7 +611,7 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	if !found {
-		log.Printf("not allowed client %s, %+v", clientIp, me.AllowedIpNets)
+		slog.Info("not allowed client", "client", clientIp, "allowed", me.AllowedIpNets)
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -640,7 +644,7 @@ func (me *Server) serviceControlHandler(w http.ResponseWriter, r *http.Request) 
 	bodyStr = strings.Replace(bodyStr, "&#34;", `"`, -1)
 	w.WriteHeader(code)
 	if _, err := w.Write([]byte(bodyStr)); err != nil {
-		log.Print(err)
+		slog.Info("error writing response", "error", err)
 	}
 }
 
@@ -718,12 +722,12 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		Space: "urn:schemas-upnp-org:event-1-0",
 	})
 	body = append([]byte(`<?xml version="1.0"?>`+"\n"), body...)
-	server.eventingLogger.Print(string(body))
+	server.eventingLogger.Info("initial event", "body", string(body))
 	for _, _url := range urls {
 		bodyReader := bytes.NewReader(body)
 		req, err := http.NewRequest("NOTIFY", _url.String(), bodyReader)
 		if err != nil {
-			log.Printf("Could not create a request to notify %s: %s", _url.String(), err)
+			slog.Info("could not create a request to notify", "url", _url.String(), "error", err)
 			continue
 		}
 		req.Header["CONTENT-TYPE"] = []string{`text/xml; charset="utf-8"`}
@@ -733,17 +737,17 @@ func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) 
 		req.Header["SEQ"] = []string{"0"}
 		// req.Header["TRANSFER-ENCODING"] = []string{"chunked"}
 		// req.ContentLength = int64(bodyReader.Len())
-		server.eventingLogger.Print(req.Header)
-		server.eventingLogger.Print("starting notify")
+		server.eventingLogger.Info("notify request header", "header", req.Header)
+		server.eventingLogger.Info("starting notify")
 		resp, err := http.DefaultClient.Do(req)
-		server.eventingLogger.Print("finished notify")
+		server.eventingLogger.Info("finished notify")
 		if err != nil {
-			log.Printf("Could not notify %s: %s", _url.String(), err)
+			slog.Info("could not notify", "url", _url.String(), "error", err)
 			continue
 		}
-		server.eventingLogger.Print(resp)
+		server.eventingLogger.Info("notify response", "response", resp)
 		b, _ := ioutil.ReadAll(resp.Body)
-		server.eventingLogger.Println(string(b))
+		server.eventingLogger.Info("notify response body", "body", string(b))
 		resp.Body.Close()
 	}
 }
@@ -766,21 +770,21 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 		// TODO: Get eventing to work with the problematic TV.
 		t := time.Now()
 		<-w.(http.CloseNotifier).CloseNotify()
-		server.eventingLogger.Printf("stalled subscribe connection went away after %s", time.Since(t))
+		server.eventingLogger.Info("stalled subscribe connection went away", "duration", time.Since(t))
 		return
 	}
 	// The following code is a work in progress. It partially implements
 	// the spec on eventing but hasn't been completed as I have nothing to
 	// test it with.
-	server.eventingLogger.Print(r.Header)
+	server.eventingLogger.Info("event subscription", "header", r.Header)
 	service := server.services["ContentDirectory"]
-	server.eventingLogger.Println(r.RemoteAddr, r.Method, r.Header.Get("SID"))
+	server.eventingLogger.Info("event subscription request", "remote_addr", r.RemoteAddr, "method", r.Method, "sid", r.Header.Get("SID"))
 	if r.Method == "SUBSCRIBE" && r.Header.Get("SID") == "" {
 		urls := upnp.ParseCallbackURLs(r.Header.Get("CALLBACK"))
-		server.eventingLogger.Println(urls)
+		server.eventingLogger.Info("callback urls", "urls", urls)
 		var timeout int
 		fmt.Sscanf(r.Header.Get("TIMEOUT"), "Second-%d", &timeout)
-		server.eventingLogger.Println(timeout, r.Header.Get("TIMEOUT"))
+		server.eventingLogger.Info("event subscription timeout", "timeout", timeout, "header", r.Header.Get("TIMEOUT"))
 		sid, timeout, _ := service.Subscribe(urls, timeout)
 		w.Header()["SID"] = []string{sid}
 		w.Header()["TIMEOUT"] = []string{fmt.Sprintf("Second-%d", timeout)}
@@ -793,7 +797,7 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 	} else if r.Method == "SUBSCRIBE" {
 		http.Error(w, "meh", http.StatusPreconditionFailed)
 	} else {
-		server.eventingLogger.Printf("unhandled event method: %s", r.Method)
+		server.eventingLogger.Info("unhandled event method", "method", r.Method)
 	}
 }
 
@@ -838,7 +842,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			server.RootObjectPath,
 		})
 		if err != nil {
-			log.Println(err)
+			slog.Info("error executing template", "error", err)
 		}
 	})
 	mux.HandleFunc(contentDirectoryEventSubURL, server.contentDirectoryEventSubHandler)
@@ -957,8 +961,8 @@ func (srv *Server) Init() (err error) {
 		srv.FS = fsys
 	}
 	srv.RootObjectPath = "./"
-	srv.eventingLogger = srv.Logger.WithNames("eventing")
-	srv.eventingLogger.Levelf(log.Debug, "hello %v", "world")
+	srv.eventingLogger = srv.Logger.With(slog.String("subsystem", "eventing"))
+	srv.eventingLogger.Debug("eventing logger initialized")
 	if err = srv.initServices(); err != nil {
 		return
 	}
@@ -975,7 +979,7 @@ func (srv *Server) Init() (err error) {
 	if srv.Interfaces == nil {
 		ifs, err := net.Interfaces()
 		if err != nil {
-			log.Print(err)
+			slog.Info("error getting network interfaces", "error", err)
 		}
 		var tmp []net.Interface
 		for _, if_ := range ifs {
@@ -1034,7 +1038,7 @@ func (srv *Server) Init() (err error) {
 		return
 	}
 	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
-	srv.Logger.Println("HTTP srv on", srv.HTTPConn.Addr())
+	srv.Logger.Info("HTTP server", "address", srv.HTTPConn.Addr())
 	srv.initMux(srv.httpServeMux)
 	srv.ssdpStopped = make(chan struct{})
 	return nil
@@ -1112,7 +1116,7 @@ func (server *Server) IgnorePath(path string) (bool, error) {
 		if hidden, err := isHiddenPath(server.FS, path); err != nil {
 			return false, err
 		} else if hidden {
-			log.Print(path, " ignored: hidden")
+			slog.Info("ignored: hidden", "path", path)
 			return true, nil
 		}
 	}
@@ -1120,14 +1124,14 @@ func (server *Server) IgnorePath(path string) (bool, error) {
 		if readable, err := isReadablePath(server.FS, path); err != nil {
 			return false, err
 		} else if !readable {
-			log.Print(path, " ignored: unreadable")
+			slog.Info("ignored: unreadable", "path", path)
 			return true, nil
 		}
 	}
 
 	for _, element := range server.IgnorePaths {
 		if strings.Contains(path, fmt.Sprintf("/%s/", element)) {
-			log.Print(path, " ignored: in ignore list")
+			slog.Info("ignored: in ignore list", "path", path)
 			return true, nil
 		}
 	}

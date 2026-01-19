@@ -5,13 +5,13 @@ package transcode
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/anacrolix/ffprobe"
-	"github.com/anacrolix/log"
 
 	. "github.com/anacrolix/dms/misc"
 )
@@ -19,7 +19,7 @@ import (
 // Invokes an external command and returns a reader from its stdout. The
 // command is waited on asynchronously.
 func transcodePipe(args []string, stderr io.Writer) (r io.ReadCloser, err error) {
-	log.Println("transcode command:", args)
+	slog.Info("transcode command", "args", args)
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stderr = stderr
 	r, err = cmd.StdoutPipe()
@@ -33,7 +33,7 @@ func transcodePipe(args []string, stderr io.Writer) (r io.ReadCloser, err error)
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			log.Printf("command %s failed: %s", args, err)
+			slog.Info("command failed", "args", args, "error", err)
 		}
 	}()
 	return

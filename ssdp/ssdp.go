@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anacrolix/log"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 )
@@ -37,15 +37,15 @@ func init() {
 	var err error
 	NetAddr, err = net.ResolveUDPAddr("udp4", AddrString)
 	if err != nil {
-		log.Printf("Could not resolve %s: %s", AddrString, err)
+		slog.Info("could not resolve address", "address", AddrString, "error", err)
 	}
 	NetAddr6LL, err = net.ResolveUDPAddr("udp6", AddrString6LL)
 	if err != nil {
-		log.Printf("Could not resolve %s: %s", AddrString6LL, err)
+		slog.Info("could not resolve address", "address", AddrString6LL, "error", err)
 	}
 	NetAddr6SL, err = net.ResolveUDPAddr("udp6", AddrString6SL)
 	if err != nil {
-		log.Printf("Could not resolve %s: %s", AddrString6SL, err)
+		slog.Info("could not resolve address", "address", AddrString6SL, "error", err)
 	}
 	AddrString2NetAdd[AddrString] = NetAddr
 	AddrString2NetAdd[AddrString6LL] = NetAddr6LL
@@ -108,7 +108,7 @@ type Server struct {
 	UUID           string
 	NotifyInterval time.Duration
 	closed         chan struct{}
-	Logger         log.Logger
+	Logger         *slog.Logger
 }
 
 func makeConn(ifi net.Interface, netAddr *net.UDPAddr) (ret *net.UDPConn, err error) {
@@ -119,12 +119,12 @@ func makeConn(ifi net.Interface, netAddr *net.UDPAddr) (ret *net.UDPConn, err er
 	if netAddr.IP.String() == AddrString {
 		p := ipv4.NewPacketConn(ret)
 		if err := p.SetMulticastTTL(2); err != nil {
-			log.Print(err)
+			slog.Info("error setting multicast TTL", "error", err)
 		}
 	} else {
 		p := ipv6.NewPacketConn(ret)
 		if err := p.SetMulticastHopLimit(2); err != nil {
-			log.Print(err)
+			slog.Info("error setting multicast hop limit", "error", err)
 		}
 	}
 	// if err := p.SetMulticastLoopback(true); err != nil {
@@ -149,7 +149,7 @@ func (me *Server) serve() {
 		default:
 		}
 		if err != nil {
-			me.Logger.Printf("error reading from UDP socket: %s", err)
+			me.Logger.Info("error reading from UDP socket", "error", err)
 			break
 		}
 		go me.handle(b[:n], addr)
@@ -244,9 +244,9 @@ func (me *Server) makeNotifyMessage(target, nts string, extraHdrs [][2]string) [
 
 func (me *Server) send(buf []byte, addr *net.UDPAddr) {
 	if n, err := me.conn.WriteToUDP(buf, addr); err != nil {
-		me.Logger.Printf("error writing to UDP socket: %s", err)
+		me.Logger.Info("error writing to UDP socket", "error", err)
 	} else if n != len(buf) {
-		me.Logger.Printf("short write: %d/%d bytes", n, len(buf))
+		me.Logger.Info("short write", "written", n, "total", len(buf))
 	}
 }
 
@@ -265,8 +265,10 @@ func (me *Server) delayedSend(delay time.Duration, buf []byte, addr *net.UDPAddr
 }
 
 func (me *Server) log(args ...interface{}) {
+	// Convert args to a message for slog
 	args = append([]interface{}{me.Interface.Name + ":"}, args...)
-	me.Logger.Print(args...)
+	msg := fmt.Sprint(args...)
+	me.Logger.Info(msg)
 }
 
 func (me *Server) sendByeBye() {
@@ -298,7 +300,7 @@ func (me *Server) allTypes() (ret []string) {
 func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 	req, err := ReadRequest(bufio.NewReader(bytes.NewReader(buf)))
 	if err != nil {
-		me.Logger.Println(err)
+		me.Logger.Info("error reading request", "error", err)
 		return
 	}
 	if req.Method != "M-SEARCH" || req.Header.Get("man") != `"ssdp:discover"` {
@@ -309,7 +311,7 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		mxHeader := req.Header.Get("mx")
 		i, err := strconv.ParseUint(mxHeader, 0, 0)
 		if err != nil {
-			me.Logger.Printf("Invalid mx header %q: %s", mxHeader, err)
+			me.Logger.Info("invalid mx header", "header", mxHeader, "error", err)
 			return
 		}
 		mx = int64(i)

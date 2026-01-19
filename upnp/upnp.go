@@ -4,11 +4,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/anacrolix/log"
 )
 
 var serviceURNRegexp *regexp.Regexp = regexp.MustCompile(`^urn:(.*):service:(\w+):(\d+)$`)
@@ -30,7 +29,8 @@ func ParseServiceType(s string) (ret ServiceURN, err error) {
 		return
 	}
 	if len(matches) != 4 {
-		log.Panicf("Invalid serviceURNRegexp?")
+		slog.Error("invalid serviceURNRegexp")
+		panic("Invalid serviceURNRegexp")
 	}
 	ret.Auth = matches[1]
 	ret.Type = matches[2]
