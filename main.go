@@ -235,8 +235,12 @@ func mainErr() error {
 				slog.Error("error parsing http address", "error", err)
 				os.Exit(1)
 			}
-			if host == "::" {
-				network = "tcp6"
+			if ip := net.ParseIP(host); ip != nil {
+				if ip.To4() != nil {
+					network = "tcp4"
+				} else {
+					network = "tcp6"
+				}
 			}
 			conn, err := net.Listen(network, config.Http)
 			if err != nil {
