@@ -155,7 +155,7 @@ func mainErr() error {
 		return fmt.Errorf("%s: %s\n", "unexpected positional arguments", flag.Args())
 	}
 
-	logger := slog.Default().With(slog.String("component", "main"))
+	logger := slog.Default()
 
 	config.Path, _ = filepath.Abs(*path)
 	config.IfName = *ifName
@@ -202,7 +202,7 @@ func mainErr() error {
 	}
 
 	dmsServer := &dms.Server{
-		Logger: logger.With(slog.String("subcomponent", "dms.server")),
+		Logger: logger,
 		Interfaces: func(ifName string) (ifs []net.Interface) {
 			var err error
 			if ifName == "" {
