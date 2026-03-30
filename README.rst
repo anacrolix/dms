@@ -6,6 +6,8 @@ dms is looking for funding for further development. See https://github.com/spons
 dms
 ===
 
+`Changelog <CHANGELOG.md>`_ | `FAQ <FAQ.md>`_
+
 dms is a UPnP DLNA Digital Media Server. It runs from the terminal, and serves
 content directly from the filesystem from the working directory, or the path
 given. The SSDP component will broadcast and respond to requests on all
@@ -37,122 +39,9 @@ To run::
 
     $ "$GOPATH"/bin/dms
 
-Running DMS using Docker
-========================
-
-`dms` is distributed as Docker Image. Serve Media in `/mediadirectory` using `dms`:
-
-.. code-block:: bash
-
-   docker pull ghcr.io/anacrolix/dms:latest
-   docker run -d --network host -v /mediadirectory:/dmsdir ghcr.io/anacrolix/dms:latest
-
-Running DMS as a systemd service
-=================================
-
-A sample systemd `.service` file has been `provided <helpers/systemd/dms.service>`_ to assist in running DMS as a system service.
-
 Running DMS as a FreeBSD service
 ================================
 
 Install the `provided <helpers/bsd/dms>`_ service file to /etc/rc.d or /usr/local/etc/rc.d
 add ``dms_enable="YES"``, and optionally ``dms_root="/path/to/my/media"`` and ``dms_user="myuser"`` to your /etc/rc.conf
 
-Known Compatible Players and Renderers
-======================================
-
- * Probably all Panasonic Viera TVs.
- * Android's BubbleUPnP and AirWire
- * Chromecast
- * VLC
- * LG Smart TVs, with varying success.
- * Roku devices
- * Apple TV 4K via VLC and 8player
- * iOS VLC and 8player
-
-
-Usage of dms:
-=====================
-
-.. list-table:: Usage
-   :widths: auto
-   :header-rows: 1
-
-   * - parameter
-     - description
-   * - ``-allowDynamicStreams``
-     - turns on support for `.dms.json` files in the path
-   * - ``-allowedIps string``
-     - allowed ip of clients, separated by comma
-   * - ``-config string``
-     - json configuration file
-   * - ``-deviceIcon string``
-     - device icon
-   * - ``-deviceIconSizes string``
-     - device icon sizes, separated by comma
-   * - ``-fFprobeCachePath string``
-     - path to FFprobe cache file (default "/home/efreak/.dms-ffprobe-cache")
-   * - ``-forceTranscodeTo string``
-     - force transcoding to certain format, supported: 'chromecast', 'vp8'
-   * - ``-friendlyName string``
-     - server friendly name
-   * - ``-http string``
-     - http server port (default ":1338")
-   * - ``-ifname string``
-     - specific SSDP network interface
-   * - ``-ignoreHidden``
-     - ignore hidden files and directories
-   * - ``-ignoreUnreadable``
-     - ignore unreadable files and directories
-   * - ``-ignore``
-     - ignore comma separated list of paths (i.e. -ignore thumbnails,thumbs)
-   * - ``-logHeaders``
-     - log HTTP headers
-   * - ``-noProbe``
-     - disable media probing with ffprobe
-   * - ``-noTranscode``
-     - disable transcoding
-   * - ``-notifyInterval duration``
-     - interval between SSPD announces (default 30s)
-   * - ``-path string``
-     - browse root path
-   * - ``-stallEventSubscribe``
-     - workaround for some bad event subscribers
-   * - ``-transcodeLogPattern``
-     - pattern where to write transcode logs to. The ``[tsname]`` placeholder is replaced with the name of the item currently being played. The default is ``$HOME/.dms/log/[tsname]``. You may turn off transcode logging entirely by setting it to ``/dev/null``. You may log to stderr by setting ``/dev/stderr``.
-
-An example json configuration file::
-
-    {
-      "path": "/path/to/media/files",
-      "friendlyName": "dms",
-      "noTranscode": true,
-      "deviceIcon": "/path/to/icon.png",
-      "deviceIconSizes": ["48:512","128:512"]
-    }
-
-Dynamic streams
-===============
-DMS supports "dynamic streams" generated on the fly. This feature can be activated with the
-``-allowDynamicStreams`` command line flag and can be configured by placing special metadata
-files in your content directory.
-The name of these metadata files ends with ``.dms.json``, their structure is `documented here <https://pkg.go.dev/github.com/anacrolix/dms/dlna/dms>`_.
-
-An example::
-
-    {
-      "Title": "My awesome webcam",
-      "Resources": [
-         {
-            "MimeType": "video/webm",
-            "Command": "ffmpeg -i rtsp://10.6.8.161:554/Streaming/Channels/502/ -c:v copy -c:a copy -movflags +faststart+frag_keyframe+empty_moov -f matroska -"
-         }
-      ]
-    }
-
-By default, dynamic content is treated as video. It is possible to specify a "Type" parameter with value "audio" or "video" to explicitly set this.
-
-Crossing Network Boundaries
-===========================
-
-DLNA/UPnP relies on multicast traffic, which typically doesn't cross network boundaries (e.g., between VLANs or subnets). If you need to access your DMS server from a different network segment, you can use `dlna-proxy <https://github.com/fenio/dlna-proxy>`_ to bridge the gap.
