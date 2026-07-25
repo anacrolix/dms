@@ -301,7 +301,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 					"path": {cdsObject.Path},
 				}.Encode(),
 			}).String(),
-			ProtocolInfo: "http-get:*:text/plain",
+			ProtocolInfo: "http-get:*:text/srt:*",
 		})
 	}
 	if mimeType.IsVideo() || mimeType.IsImage() {
