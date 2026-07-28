@@ -248,6 +248,11 @@ type Server struct {
 	Interfaces             []net.Interface
 	httpServeMux           *http.ServeMux
 	RootObjectPath         string
+	// Real filesystem root, captured from RootObjectPath during Init before it
+	// is reset to "./". Used to resolve absolute paths for external tools
+	// (ffmpeg), which run with dms's working directory rather than the media
+	// root.
+	rootPath string
 	OnBrowseDirectChildren func(path string, rootObjectPath string, host, userAgent string) (ret []interface{}, err error)
 	OnBrowseMetadata       func(path string, rootObjectPath string, host, userAgent string) (ret interface{}, err error)
 	rootDescXML            []byte
@@ -470,7 +475,13 @@ func (me *Server) serveDLNATranscode(w http.ResponseWriter, r *http.Request, pat
 		}
 		logFile = aLogFile
 	}
-	p, err := ts.Transcode(path_, range_.Start, range_.End-range_.Start, logFile)
+	// External ffmpeg runs with dms's working directory, not the media root, so
+	// it needs an absolute path. In dynamic mode path_ is a command, not a file.
+	transcodePath := path_
+	if !dynamicMode {
+		transcodePath = filepath.Join(me.rootPath, path_)
+	}
+	p, err := ts.Transcode(transcodePath, range_.Start, range_.End-range_.Start, logFile)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -960,6 +971,7 @@ func (srv *Server) Init() (err error) {
 		fsys := os.DirFS(srv.RootObjectPath)
 		srv.FS = fsys
 	}
+	srv.rootPath = srv.RootObjectPath
 	srv.RootObjectPath = "./"
 	srv.eventingLogger = srv.Logger.With(slog.String("subsystem", "eventing"))
 	srv.eventingLogger.Debug("eventing logger initialized")
