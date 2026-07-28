@@ -6,24 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [v1.8.0] — 2026-07-28
+
 ### Added
+- IPv6 support for SSDP
+- Samsung TV fast-forward/rewind support (#169)
+- CHANGELOG and FAQ documents
 - Justfile with `run` and `browse-root` recipes for development convenience
 
 ### Changed
+- Content directory is now served through the `fs.FS` interface, allowing any `fs.FS` implementation as the browse root (#167)
 - Migrated logging from `anacrolix/log` to standard library `log/slog`
 - HTTP listener now uses `net.ParseIP` to correctly select `tcp4` or `tcp6` network
+- Subtitle `ProtocolInfo` MIME type changed from `text/plain` to `text/srt` (#183)
+- Minimum Go version bumped to 1.25, dependencies and GitHub Actions updated (#177)
+- Docker image improvements, including native multi-platform builds with CGO enabled (#168, #177)
 
 ### Fixed
+- Transcoding is now given an absolute path for ffmpeg, fixing all transcoding when `-path` points outside the working directory (#184)
 - `allowedIps` config file parsing bug (#178)
 - `::` in `-http` argument now correctly produces an IPv6 socket (#171)
+- goreleaser release workflow (#166)
 
 ---
 
-## [v1.7.2] — 2025-06-17
+## [v1.7.2] — 2025-06-21
 
 ### Added
-- IPv6 support for SSDP (#162)
-- Samsung TV fast-forward/rewind support (#169)
 - `deviceIconSizes` flag for configuring device icon sizes (e.g. `"48:512,128:512"`) (#146)
 - Example JSON config file
 
@@ -31,7 +42,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Memory leak from `time.After` — replaced with proper timer management
 - Slow browse performance on large directories caused by directory walk and ffprobe during `childCount` calculation
 - `ssdp.Server.Serve` not returning when closed
-- Docker image improvements (#168)
 
 ---
 
@@ -163,7 +173,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Go modules support
 - Initial tagged release
 
-[Unreleased]: https://github.com/anacrolix/dms/compare/v1.7.2...HEAD
+[Unreleased]: https://github.com/anacrolix/dms/compare/v1.8.0...HEAD
+[v1.8.0]: https://github.com/anacrolix/dms/compare/v1.7.2...v1.8.0
 [v1.7.2]: https://github.com/anacrolix/dms/compare/v1.7.1...v1.7.2
 [v1.7.1]: https://github.com/anacrolix/dms/compare/v1.7.0...v1.7.1
 [v1.7.0]: https://github.com/anacrolix/dms/compare/v1.6.0...v1.7.0
