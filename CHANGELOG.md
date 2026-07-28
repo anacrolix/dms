@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - Transcoding is now given an absolute path for ffmpeg, fixing all transcoding when `-path` points outside the working directory (#184)
+- Build on platforms other than Linux, macOS and Windows (e.g. FreeBSD), broken by the `fs.FS` migration
 - `allowedIps` config file parsing bug (#178)
 - `::` in `-http` argument now correctly produces an IPv6 socket (#171)
 - goreleaser release workflow (#166)
