@@ -1,5 +1,5 @@
-//go:build linux || darwin
-// +build linux darwin
+//go:build linux || darwin || openbsd
+// +build linux darwin openbsd
 
 package dms
 
