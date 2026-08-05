@@ -1112,7 +1112,7 @@ func (srv *Server) ffmpegProbe(path string) (info *ffprobe.Info, err error) {
 	key := ffmpegInfoCacheKey{path, fi.ModTime().UnixNano()}
 	value, ok := srv.FFProbeCache.Get(key)
 	if !ok {
-		uri := fmt.Sprintf("http://127.0.0.1:%d%s?path=%s", srv.httpPort(), resPath, path)
+		uri := fmt.Sprintf("http://localhost:%d%s?path=%s", srv.httpPort(), resPath, path)
 		info, err = ffprobe.Run(uri)
 		err = suppressFFmpegProbeDataErrors(err)
 		srv.FFProbeCache.Set(key, info)
