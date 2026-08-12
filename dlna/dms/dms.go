@@ -813,7 +813,7 @@ func (server *Server) contentDirectoryEventSubHandler(w http.ResponseWriter, r *
 }
 
 func (server *Server) serveDynamicStream(w http.ResponseWriter, r *http.Request, metadataPath string) error {
-	dmsMediaItem, err := readDynamicStream(metadataPath)
+	dmsMediaItem, err := readDynamicStream(server.FS, metadataPath)
 	if err != nil {
 		return err
 	}

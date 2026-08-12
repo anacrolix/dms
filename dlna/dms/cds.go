@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -59,8 +58,8 @@ type dmsDynamicMediaItem struct {
 	Resources []dmsDynamicStreamResource
 }
 
-func readDynamicStream(metadataPath string) (*dmsDynamicMediaItem, error) {
-	bytes, err := ioutil.ReadFile(metadataPath)
+func readDynamicStream(fsys fs.FS, metadataPath string) (*dmsDynamicMediaItem, error) {
+	bytes, err := fs.ReadFile(fsys, metadataPath)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +73,7 @@ func readDynamicStream(metadataPath string) (*dmsDynamicMediaItem, error) {
 
 func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObject object, fileInfo fs.FileInfo, host, userAgent string) (ret interface{}, err error) {
 	// at this point we know that entryFilePath points to a .dms.json file; slurp and parse
-	dmsMediaItem, err := readDynamicStream(cdsObject.FilePath())
+	dmsMediaItem, err := readDynamicStream(me.FS, cdsObject.FilePath())
 	if err != nil {
 		me.Logger.Info("file ignored", "path", cdsObject.FilePath(), "error", err)
 		return
