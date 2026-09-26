@@ -19,6 +19,9 @@ func init() {
 	if err := mime.AddExtensionType(".ogg", "audio/ogg"); err != nil {
 		slog.Info("could not register MIME type", "mime_type", "audio/ogg", "error", err)
 	}
+	if err := mime.AddExtensionType(".ts", "video/mp2t"); err != nil {
+		slog.Info("could not register MIME type", "mime_type", "video/mp2t", "error", err)
+	}
 }
 
 // Example: "video/mpeg"
