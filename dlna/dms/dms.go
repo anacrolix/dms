@@ -701,7 +701,7 @@ func (me *Server) serveIcon(w http.ResponseWriter, r *http.Request) {
 func (me *Server) serveSubtitle(w http.ResponseWriter, r *http.Request) {
 	filePath := me.filePath(r.URL.Query().Get("path"))
 	subtitleFilePath := strings.TrimSuffix(filePath, filepath.Ext(filePath)) + ".srt"
-	http.ServeFile(w, r, subtitleFilePath)
+	http.ServeFileFS(w, r, me.FS, subtitleFilePath)
 }
 
 func (server *Server) contentDirectoryInitialEvent(urls []*url.URL, sid string) {
