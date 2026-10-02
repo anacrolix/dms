@@ -202,6 +202,7 @@ func (me *Server) ssdpInterface(if_ net.Interface, addrString string) {
 		Server:         serverField,
 		UUID:           me.rootDeviceUUID,
 		NotifyInterval: me.NotifyInterval,
+		InterfaceAddrs: me.InterfaceAddrs,
 		Logger:         logger,
 	}
 	if err := s.Init(); err != nil {
@@ -275,6 +276,9 @@ type Server struct {
 	StallEventSubscribe bool
 	// Time interval between SSPD announces
 	NotifyInterval time.Duration
+	// Looks up the addresses of an SSDP interface. Defaults to
+	// net.Interface.Addrs. See ssdp.Server.InterfaceAddrs.
+	InterfaceAddrs func(net.Interface) ([]net.Addr, error)
 	// Ignore hidden files and directories
 	IgnoreHidden bool
 	// Ignore unreadable files and directories
