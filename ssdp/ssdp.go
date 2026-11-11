@@ -116,7 +116,7 @@ func makeConn(ifi net.Interface, netAddr *net.UDPAddr) (ret *net.UDPConn, err er
 	if err != nil {
 		return
 	}
-	if netAddr.IP.String() == AddrString {
+	if netAddr.IP.To4() != nil {
 		p := ipv4.NewPacketConn(ret)
 		if err := p.SetMulticastTTL(2); err != nil {
 			slog.Info("error setting multicast TTL", "error", err)
