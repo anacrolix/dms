@@ -616,7 +616,13 @@ func (o *object) readDir(fsys fs.FS) (fis []fs.FileInfo, err error) {
 	}
 	fis = make([]fs.FileInfo, 0, len(dirFile))
 	for _, file := range dirFile {
-		fi, _ := file.Info()
+		fi, err := fs.Stat(fsys, path.Join(o.Path, file.Name()))
+		if err != nil {
+			fi, _ = file.Info()
+		}
+		if fi == nil {
+			continue
+		}
 		fis = append(fis, fi)
 	}
 	return
