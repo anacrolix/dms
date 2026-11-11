@@ -107,6 +107,10 @@ type Server struct {
 	Location       func(net.IP) string
 	UUID           string
 	NotifyInterval time.Duration
+	// InterfaceAddrs returns the addresses of Interface. Defaults to
+	// net.Interface.Addrs, which fails on platforms that restrict netlink
+	// access, such as Android 11+ (https://github.com/golang/go/issues/40569).
+	InterfaceAddrs func(net.Interface) ([]net.Addr, error)
 	closed         chan struct{}
 	Logger         *slog.Logger
 }
@@ -156,6 +160,13 @@ func (me *Server) serve() {
 	}
 }
 
+func (me *Server) interfaceAddrs() ([]net.Addr, error) {
+	if me.InterfaceAddrs != nil {
+		return me.InterfaceAddrs(me.Interface)
+	}
+	return me.Interface.Addrs()
+}
+
 func (me *Server) Init() (err error) {
 	me.closed = make(chan struct{})
 	me.conn, err = makeConn(me.Interface, me.NetAddr)
@@ -180,7 +191,7 @@ func (me *Server) Serve() (err error) {
 		default:
 		}
 
-		addrs, err := me.Interface.Addrs()
+		addrs, err := me.interfaceAddrs()
 		if err != nil {
 			return err
 		}
@@ -336,9 +347,10 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 		return nil
 	}(req.Header.Get("st"))
 	for _, ip := range func() (ret []net.IP) {
-		addrs, err := me.Interface.Addrs()
+		addrs, err := me.interfaceAddrs()
 		if err != nil {
-			panic(err)
+			me.Logger.Info("error getting interface addresses", "error", err)
+			return
 		}
 		for _, addr := range addrs {
 			if ip, ok := func() (net.IP, bool) {

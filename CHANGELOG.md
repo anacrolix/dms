@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `InterfaceAddrs` option on `ssdp.Server` and `dms.Server` to override how interface addresses are looked up, so SSDP works where `net.Interface.Addrs` is denied (e.g. Android 11+)
+
+### Fixed
+- SSDP no longer panics when interface addresses can't be read while answering an M-SEARCH
+
 ---
 
 ## [v1.8.0] — 2026-07-28
