@@ -365,6 +365,9 @@ func (me *Server) handle(buf []byte, sender *net.UDPAddr) {
 				}
 				panic(addr)
 			}(); ok {
+				if ip.IsLinkLocalUnicast() {
+					continue
+				}
 				ret = append(ret, ip)
 			}
 		}
